@@ -1,0 +1,13 @@
+{
+  "profile": "product",
+  "sourceRoots": ["src"],
+  "locale": "zh-CN",
+  "canonicalMap": "DESIGN.md",
+  "requiredCapabilities": ["Scrollbar"],
+  "requiredCommands": ["typecheck", "build", "e2e"],
+  "commands": {
+    "typecheck": "npm run typecheck",
+    "build": "npm run build",
+    "e2e": "npm test"
+  }
+}

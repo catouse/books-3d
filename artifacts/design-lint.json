@@ -1,0 +1,56 @@
+{
+  "findings": [
+    {
+      "severity": "warning",
+      "path": "colors.paper",
+      "message": "'paper' is defined but never referenced by any component.",
+      "rule": "orphaned-tokens"
+    },
+    {
+      "severity": "warning",
+      "path": "colors.ink",
+      "message": "'ink' is defined but never referenced by any component.",
+      "rule": "orphaned-tokens"
+    },
+    {
+      "severity": "warning",
+      "path": "colors.muted",
+      "message": "'muted' is defined but never referenced by any component.",
+      "rule": "orphaned-tokens"
+    },
+    {
+      "severity": "warning",
+      "path": "colors.primary-hover",
+      "message": "'primary-hover' is defined but never referenced by any component.",
+      "rule": "orphaned-tokens"
+    },
+    {
+      "severity": "warning",
+      "path": "colors.sage",
+      "message": "'sage' is defined but never referenced by any component.",
+      "rule": "orphaned-tokens"
+    },
+    {
+      "severity": "warning",
+      "path": "colors.border",
+      "message": "'border' is defined but never referenced by any component.",
+      "rule": "orphaned-tokens"
+    },
+    {
+      "severity": "warning",
+      "path": "colors.gold",
+      "message": "'gold' is defined but never referenced by any component.",
+      "rule": "orphaned-tokens"
+    },
+    {
+      "severity": "info",
+      "message": "Design system defines 9 colors, 2 typography scales, 3 rounding levels, 3 spacing tokens, 1 component.",
+      "rule": "token-summary"
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 7,
+    "infos": 1
+  }
+}
