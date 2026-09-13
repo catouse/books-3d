@@ -20,6 +20,34 @@ npm run preview
 
 `dist/` 是构建成品。请通过 HTTP 服务访问；直接双击 HTML 不支持 ES 模块加载。
 
+## Cloudflare 部署
+
+线上地址：[books-3d.catou.se](https://books-3d.catou.se)。
+
+通过 Cloudflare Workers 静态资源托管 `dist/`，配置在 `wrangler.jsonc`。Worker 名称为 `books-3d`，自定义域名为 `books-3d.catou.se`；Cloudflare 会管理对应的 DNS 记录和 HTTPS 证书。
+
+首次部署时登录拥有 `catou.se` 的 Cloudflare 账户：
+
+```sh
+npm ci
+npx wrangler login
+```
+
+之后运行以下命令构建并发布当前代码：
+
+```sh
+npm run deploy
+```
+
+只检查构建与部署配置、不发布时：
+
+```sh
+npm run build
+npx wrangler deploy --dry-run
+```
+
+部署上传的内容仅来自 `dist/`。这是手动部署流程，Git 推送不会自动触发发布。收藏仍保存在访问者当前域名的浏览器 localStorage 中。
+
 ## 体验
 
 - 从真实 3D 书架或书名选择绘本，书本移动至桌面、打开封面，角色和风景立起。
