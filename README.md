@@ -26,6 +26,29 @@ npm run preview
 
 通过 Cloudflare Workers 静态资源托管 `dist/`，配置在 `wrangler.jsonc`。Worker 名称为 `books-3d`，自定义域名为 `books-3d.catou.se`；Cloudflare 会管理对应的 DNS 记录和 HTTPS 证书。
 
+### GitHub 推送后自动部署
+
+已于 2026-09-13 在现有 Worker 的 [构建设置](https://dash.cloudflare.com/95f1c6b69dfd70b5d10ed6ab57ca07f6/workers/services/view/books-3d/production/settings#builds) 中连接 GitHub，自动部署配置如下：
+
+| 配置 | 值 |
+| --- | --- |
+| GitHub 仓库 | `catouse/books-3d` |
+| 生产分支 | `main` |
+| 根目录 | `/` |
+| 构建命令 | `npm run build` |
+| 部署命令 | `npx wrangler deploy` |
+| 构建变量 | `NODE_VERSION=24` |
+| 构建缓存 | 开启 |
+| 非生产分支构建 | 关闭 |
+
+依赖使用仓库中已提交的 `package-lock.json` 安装。部署凭据保存在 Cloudflare 的构建设置中，无需写入仓库。构建命令已经包含 TypeScript 检查；部署命令单独发布构建好的 `dist/`，避免使用 `npm run deploy` 再构建一次。
+
+每次推送到 `main` 都会触发构建，成功后更新 [books-3d.catou.se](https://books-3d.catou.se)。其他分支关闭自动构建；合并到 `main` 后才发布线上版本。构建和部署日志可在 Worker 的 [构建历史记录](https://dash.cloudflare.com/95f1c6b69dfd70b5d10ed6ab57ca07f6/workers/services/view/books-3d/production/builds) 页面查看。
+
+这是 Cloudflare 端的一次性配置；仅提交 `wrangler.jsonc` 不会启用自动部署。连接时已通过 GitHub 当前提交的干净 `npm ci`、生产构建和 Wrangler 部署预检；首次云端构建等待下一次推送到 `main` 后验证。流程参考 [Workers Builds 文档](https://developers.cloudflare.com/workers/ci-cd/builds/)。
+
+### 本地手动部署
+
 首次部署时登录拥有 `catou.se` 的 Cloudflare 账户：
 
 ```sh
@@ -46,7 +69,7 @@ npm run build
 npx wrangler deploy --dry-run
 ```
 
-部署上传的内容仅来自 `dist/`。这是手动部署流程，Git 推送不会自动触发发布。收藏仍保存在访问者当前域名的浏览器 localStorage 中。
+部署上传的内容仅来自 `dist/`。收藏仍保存在访问者当前域名的浏览器 localStorage 中。
 
 ## 体验
 
