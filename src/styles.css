@@ -83,14 +83,16 @@ h1 { font-family: 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif; f
 .loading-line { width: 90px; height: 3px; border-radius: 3px; background: var(--sage); overflow: hidden; position: relative; }
 .loading-line::after { content: ''; position: absolute; width: 35px; height: 3px; left: -35px; background: var(--green); animation: loading 1.2s ease infinite; }
 @keyframes loading { to { left: 100%; } }
-.shelf-content { max-width: 760px; margin: -7px auto 0; position: relative; z-index: 2; }
-.book-selection { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 27px; }
+.shelf-content { max-width: 800px; margin: -7px auto 0; position: relative; z-index: 2; }
+.book-selection { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
 .book-choice { text-align: center; border-radius: 12px; padding: 13px 7px 15px; min-height: 107px; }
 .book-choice:hover { background: #ecefe38c; transform: translateY(-3px); }
 .book-theme { display: inline-flex; align-items: center; justify-content: center; font-size: 9px; letter-spacing: .04em; padding: 4px 10px; border-radius: 5px; }
 .theme-forest { color: #597358; background: #e9edde; }
 .theme-sea { color: #507d89; background: #e5edf0; }
 .theme-sky { color: #976b4b; background: #f2e7db; }
+.theme-autumn { color: #805a29; background: #f1e4cb; }
+.theme-rain { color: #456c58; background: #e1eae2; }
 .book-title { display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; letter-spacing: .02em; gap: 8px; margin-top: 10px; }
 .book-title svg { color: #87937d; width: 15px; transition: transform .2s; }
 .book-choice:hover .book-title svg { transform: translateX(3px); }
@@ -144,7 +146,7 @@ h1 { font-family: 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif; f
 .quiz-option.is-correct, .quiz-option.is-correct:disabled { background: var(--sage); border-color: var(--green); color: var(--green-dark); opacity: 1; }
 .quiz-option.is-wrong { border-color: #b99977; background: #f4eade; }
 .quiz-feedback { min-height: 48px; padding-top: 10px; display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
-.quiz-feedback p { font-size: 12px; line-height: 1.8; display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--green); }
+.quiz-feedback p { font-size: 14px; line-height: 1.8; max-width: 600px; min-height: 3.6em; display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--green); }
 .reward-panel { display: flex; gap: 22px; align-items: center; justify-content: center; border-top: 1px solid var(--line); padding-top: 23px; }
 .reward-emblem { height: 70px; width: 70px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: #ede8cd; border: 1px solid #d5c791; color: #a48034; }
 .reward-panel h2 { font-size: 19px; margin: 7px 0; font-weight: 500; }
@@ -202,8 +204,16 @@ h1 { font-family: 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif; f
 .story-mode .stage-shell { margin-top: 23px; }
 @media (max-width: 760px) { .intro h1 { min-height: 50px; } .story-mode .stage-shell { margin-top: 23px; } }
 
-@media (max-width: 760px) { .three-stage { height: 345px; } }
-@media (max-width: 390px) { .three-stage { height: 320px; } }
+@media (max-width: 760px) {
+  .three-stage { height: 380px; }
+  .book-selection { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px 4px; }
+  .book-choice { grid-column: span 2; min-height: 102px; }
+  .book-choice:nth-child(4) { grid-column: 2 / span 2; }
+  .book-choice:nth-child(5) { grid-column: 4 / span 2; }
+  .book-title { font-size: 12px; }
+  .book-theme { font-size: 9px; }
+  .book-meta { font-size: 9px; }
+}
 
 /* Reading occupies the same room and canvas, expanded to the viewport. */
 [hidden] { display: none !important; }
@@ -274,6 +284,9 @@ html.reading-active, html.reading-active body { overflow: hidden; }
   .is-immersive .narrative-action { min-width: 0; }
   .is-immersive .quiz-panel { padding: 16px 22px; }
   .is-immersive .quiz-panel > h2 { font-size: 16px; }
+  .is-immersive .quiz-options { flex-direction: column; align-items: stretch; }
+  .is-immersive .quiz-option { text-align: left; justify-content: center; font-size: 14px; padding: 9px 13px; }
+  .is-immersive .quiz-feedback p { font-size: 14px; }
   .is-immersive .quiz-feedback { padding-top: 10px; }
   .is-immersive .reward-panel { min-height: 198px; padding: 18px 24px; }
   .is-immersive .reward-panel > .primary-button { margin-top: 0; }

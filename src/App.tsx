@@ -6,9 +6,9 @@ import { AudioEngine } from './audio';
 import { stories } from './stories';
 
 type Phase = 'loading' | 'shelf' | 'opening' | 'reading' | 'reacting' | 'turning' | 'quiz' | 'celebrating' | 'reward' | 'closing' | 'error';
-type State = { phase: Phase; selected: number; page: number; reacted: boolean };
+type State = { phase: Phase; selected: number; page: number; step: number; reacted: boolean };
 type Panel = 'help' | 'collection' | null;
-const initial: State = { phase: 'loading', selected: 0, page: 0, reacted: false };
+const initial: State = { phase: 'loading', selected: 0, page: 0, step: 0, reacted: false };
 const storageKey = 'komorebi-treasures-v1';
 function readTreasures(): string[] {
   try { const value: unknown = JSON.parse(localStorage.getItem(storageKey) || '[]'); return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string' && stories.some(story => story.id === id)) : []; } catch { return []; }
@@ -79,6 +79,8 @@ export default function App() {
   const actions = useRef({ select: (_index: number) => {}, interact: () => {} });
   const story = stories[state.selected];
   const scene = story.scenes[state.page];
+  const action = scene.actions[Math.min(state.step, scene.actions.length - 1)];
+  const narrative = state.step ? scene.actions[state.step - 1].after : scene.text;
   const isShelf = state.phase === 'shelf' || state.phase === 'loading' || (state.phase === 'closing' && !immersive);
   const isBusy = ['loading', 'opening', 'reacting', 'turning', 'celebrating', 'closing'].includes(state.phase);
   const correct = quizChoice === story.quiz.answer;
@@ -131,7 +133,7 @@ export default function App() {
     void startAudio();
     audioRef.current?.click();
     flushSync(() => {
-      transition({ phase: 'opening', selected: index, page: 0, reacted: false });
+      transition({ phase: 'opening', selected: index, page: 0, step: 0, reacted: false });
       setQuizChoice(null);
       setImmersive(true);
     });
@@ -143,13 +145,20 @@ export default function App() {
     } catch (reason) { if (operation === operationRef.current) fail(reason); }
   }
   async function interact() {
-    if (stateRef.current.phase !== 'reading' || stateRef.current.reacted || panelRef.current) return;
+    const current = stateRef.current;
+    if (current.phase !== 'reading' || current.reacted || panelRef.current) return;
     const world = worldRef.current;
     if (!world) return;
     const operation = ++operationRef.current;
     transition({ phase: 'reacting' });
-    audioRef.current?.click();
-    try { await world.react(); if (operation !== operationRef.current) return; audioRef.current?.sparkle(); transition({ phase: 'reading', reacted: true }); } catch (reason) { if (operation === operationRef.current) fail(reason); }
+    if (current.selected === 2 && (current.page === 0 || current.page === 3)) audioRef.current?.storyBell(current.page === 0);
+    else audioRef.current?.click();
+    try {
+      await world.react(current.step);
+      if (operation !== operationRef.current) return;
+      const step = current.step + 1;
+      transition({ phase: 'reading', step, reacted: step === stories[current.selected].scenes[current.page].actions.length });
+    } catch (reason) { if (operation === operationRef.current) fail(reason); }
   }
   async function next() {
     const current = stateRef.current;
@@ -160,7 +169,7 @@ export default function App() {
     if (!world) return;
     const operation = ++operationRef.current;
     transition({ phase: 'turning' });
-    try { await world.turnPage(current.page + 1); if (operation === operationRef.current) transition({ phase: 'reading', page: current.page + 1, reacted: false }); } catch (reason) { if (operation === operationRef.current) fail(reason); }
+    try { await world.turnPage(current.page + 1); if (operation === operationRef.current) transition({ phase: 'reading', page: current.page + 1, step: 0, reacted: false }); } catch (reason) { if (operation === operationRef.current) fail(reason); }
   }
   async function back() {
     if (!['reading', 'quiz', 'reward', 'error'].includes(stateRef.current.phase) || panelRef.current) return;
@@ -180,7 +189,7 @@ export default function App() {
       if (operation !== operationRef.current) return;
       world.setImmersive(false);
       shelfFocusRef.current = selected;
-      transition({ phase: 'shelf', page: 0, reacted: false });
+      transition({ phase: 'shelf', page: 0, step: 0, reacted: false });
       setQuizChoice(null);
     } catch (reason) { if (operation === operationRef.current) fail(reason); }
   }
@@ -190,7 +199,7 @@ export default function App() {
     setQuizChoice(index);
   }
   async function collect() {
-    if (stateRef.current.phase !== 'quiz' || !correct) return;
+    if (stateRef.current.phase !== 'quiz') return;
     const world = worldRef.current;
     if (!world) return;
     const operation = ++operationRef.current;
@@ -237,7 +246,7 @@ export default function App() {
     });
     return () => { active = false; operationRef.current += 1; layoutAnimationRef.current?.cancel(); world?.dispose(); audio.dispose(); worldRef.current = null; };
   }, [retry]);
-  useEffect(() => { worldRef.current?.setInteractive(!panel && state.phase === 'reading' && !state.reacted); }, [panel, state]);
+  useEffect(() => { worldRef.current?.setInteractive(!panel && state.phase === 'reading' && !state.reacted, state.step); }, [panel, state]);
 
   useEffect(() => {
     if (!panel && state.phase === 'shelf' && shelfFocusRef.current !== null) {
@@ -265,7 +274,7 @@ export default function App() {
         <button className="nav-button" onClick={() => openPanel('help')}>怎么玩</button>
       </nav>
       <div className="header-actions">
-        <button className="collection-button" onClick={() => openPanel('collection')} aria-label={`我的收藏 ${treasures.length} / 3`}><Star size={19} weight={treasures.length ? 'fill' : 'regular'} /><span>我的收藏</span><span className="collection-count">{treasures.length}</span></button>
+        <button className="collection-button" onClick={() => openPanel('collection')} aria-label={`我的收藏 ${treasures.length} / ${stories.length}`}><Star size={19} weight={treasures.length ? 'fill' : 'regular'} /><span>我的收藏</span><span className="collection-count">{treasures.length}</span></button>
         <span className="header-divider" />
         <button className="sound-button" aria-label={muted ? '开启声音' : '关闭声音'} aria-pressed={!muted} onClick={toggleSound}>{muted ? <SpeakerSlash size={20} /> : <SpeakerHigh size={20} />}<span>声音 {muted ? '关' : '开'}</span></button>
       </div>
@@ -276,16 +285,16 @@ export default function App() {
         <div className="intro" hidden={immersive}>
           <div className="intro-kicker"><span />{isShelf ? '会跃出纸页的小小图书馆' : story.tag}<span /></div>
           <h1>{isShelf ? <>翻开书，<span className="accent-word">奇遇开始。<svg viewBox="0 0 290 12" aria-hidden="true"><path d="M4 7Q135-2 286 5" /></svg></span></> : story.title}</h1>
-          <p>{isShelf ? '书页的另一边，有个世界正等着你。' : state.phase === 'reward' ? '小小的善意，变成了珍贵的礼物。' : '轻轻一点，让故事动起来。'}</p>
+          <p>{isShelf ? '书页的另一边，有个世界正等着你。' : state.phase === 'reward' ? story.keepsake : '轻轻一点，陪朋友试试办法。'}</p>
         </div>
 
         <div ref={stageShellRef} className="stage-shell">
           <div className="stage-topline">
-            {isShelf ? <span className="shelf-label"><span className="little-dot" /> 今日书架 <span className="shelf-total">3 本</span></span> : <button className="back-button" aria-label="返回书架" disabled={isBusy} onClick={() => void back()}><ArrowLeft size={17} /> 返回书架</button>}
+            {isShelf ? <span className="shelf-label"><span className="little-dot" /> 今日书架 <span className="shelf-total">{stories.length} 本</span></span> : <button className="back-button" aria-label="返回书架" disabled={isBusy} onClick={() => void back()}><ArrowLeft size={17} /> 返回书架</button>}
             {!isShelf && <span className="reader-title" role="heading" aria-level={1}>{story.title}</span>}
             {isShelf ? <span className="stage-aside"><Leaf size={14} /> 今天，想去哪里冒险？</span> : <div className="reader-tools"><div className="page-indicator" aria-label={`第 ${state.page + 1} 页，共 4 页`}><span>{String(state.page + 1).padStart(2, '0')}</span><div className="page-dots">{story.scenes.map((_, index) => <i key={index} className={index <= state.page ? 'filled' : ''} />)}</div><span>04</span></div><button className="sound-button" aria-label={muted ? '开启声音' : '关闭声音'} aria-pressed={!muted} onClick={toggleSound}>{muted ? <SpeakerSlash size={20} /> : <SpeakerHigh size={20} />}<span>声音 {muted ? '关' : '开'}</span></button></div>}
           </div>
-          <div ref={stageRef} className="three-stage" role="img" aria-label={isShelf ? '木书架上摆着小兔、鲸鱼和狐狸的绘本，也可以点击下方书名选择。' : `${story.title}。${scene.text} 也可以使用下方按钮参与故事。`} />
+          <div ref={stageRef} className="three-stage" role="img" aria-label={isShelf ? `木书架上摆着 ${stories.length} 本动物朋友的绘本，也可以点击下方书名选择。` : `${story.title}。${narrative} 也可以使用下方按钮参与故事。`} />
           {(state.phase === 'loading' || state.phase === 'error') && <div className="stage-loading" role="status">
             <BookOpen size={38} weight="duotone" />
             <p>{state.phase === 'loading' ? '正在准备故事…' : error}</p>
@@ -303,11 +312,11 @@ export default function App() {
           <p className="selection-hint"><HandPointing size={19} /> 选一本喜欢的绘本，开始冒险吧。</p>
         </div> : <div className="story-content" id="story-controls" aria-live="polite" aria-atomic="true">
           {['opening', 'reading', 'reacting', 'turning', 'closing'].includes(state.phase) && <div className="narrative">
-            <div className="narrative-copy"><span className="chapter-label">{String(state.page + 1).padStart(2, '0')} <span /> {scene.title}</span><p>{state.reacted ? scene.after : scene.text}</p></div>
-            <div className="narrative-action">{state.reacted ? <button data-testid="next-page" className="primary-button" disabled={isBusy} onClick={() => void next()}>{state.page === 3 ? '来答个小问题' : '翻到下一页'}<ArrowRight size={18} /></button> : <><button data-testid="interact" className="interaction-button" disabled={isBusy} onClick={() => void interact()}><HandPointing size={19} />{scene.actionLabel}</button><span className="action-hint">{scene.hint}</span></>}</div>
+            <div className="narrative-copy"><span className="chapter-label">{String(state.page + 1).padStart(2, '0')} <span /> {scene.title}</span><p>{narrative}</p></div>
+            <div className="narrative-action">{state.reacted ? <button data-testid="next-page" className="primary-button" disabled={isBusy} onClick={() => void next()}>{state.page === 3 ? '收下这段小回忆' : '翻到下一页'}<ArrowRight size={18} /></button> : <><button data-testid="interact" className="interaction-button" disabled={isBusy} onClick={() => void interact()}><HandPointing size={19} />{action.label}</button><span className="action-hint">{action.hint}</span></>}</div>
           </div>}
-          {state.phase === 'quiz' && <div className="quiz-panel"><span className="chapter-label"><Sparkle size={16} /> 故事小问答</span><h2>{story.quiz.question}</h2><div className="quiz-options">{story.quiz.options.map((option, index) => <button key={option} disabled={correct} className={`quiz-option ${quizChoice === index ? correct ? 'is-correct' : 'is-wrong' : ''}`} onClick={() => answer(index)}>{quizChoice === index && correct && <Check size={17} />}{option}</button>)}</div><div className="quiz-feedback">{quizChoice !== null && (correct ? <><p><Check size={17} /> 答对啦！ {story.quiz.explanation}</p><button data-testid="collect-reward" className="primary-button" onClick={() => void collect()}>领取故事礼物 <Star size={17} /></button></> : <p>再想一想刚才的故事，你一定知道。</p>)}</div></div>}
-          {(state.phase === 'reward' || state.phase === 'celebrating') && <div className="reward-panel"><span className="reward-emblem"><Star size={30} weight="duotone" /></span><div><span className="chapter-label">来自故事的小礼物</span><h2>收集到了「{story.reward}」！</h2><p>{storageNotice ? '浏览器暂时无法保存，收藏只在本次打开期间保留。' : '已经放进“我的收藏”，替你好好保管啦。'}</p></div><button className="primary-button" disabled={isBusy} onClick={() => void back()}>返回书架 <ArrowRight size={18} /></button></div>}
+          {state.phase === 'quiz' && <div className="quiz-panel"><span className="chapter-label"><Sparkle size={16} /> 一起想想这个故事</span><h2>{story.quiz.question}</h2><div className="quiz-options">{story.quiz.options.map((option, index) => <button key={option} disabled={correct} aria-pressed={quizChoice === index} className={`quiz-option ${quizChoice === index ? correct ? 'is-correct' : 'is-wrong' : ''}`} onClick={() => answer(index)}>{quizChoice === index && correct && <Check size={17} />}{option}</button>)}</div><div className="quiz-feedback"><p>{quizChoice === null ? '可以选一选，也可以直接收下故事书签。' : correct ? <>你发现了！{story.quiz.explanation}</> : story.quiz.hint}</p><button data-testid="collect-reward" className="primary-button" onClick={() => void collect()}>收下故事书签 <BookmarkSimple size={17} /></button></div></div>}
+          {(state.phase === 'reward' || state.phase === 'celebrating') && <div className="reward-panel"><span className="reward-emblem"><Star size={30} weight="duotone" /></span><div><span className="chapter-label">这段故事的小纪念</span><h2>{state.phase === 'celebrating' ? `正在收好「${story.reward}」…` : `收集到了「${story.reward}」！`}</h2><p>{story.keepsake}</p>{state.phase === 'reward' && <p>{storageNotice ? '浏览器暂时无法保存，收藏只在本次打开期间保留。' : '已经放进“我的收藏”，替你好好保管啦。'}</p>}</div><button className="primary-button" disabled={isBusy} onClick={() => void back()}>返回书架 <ArrowRight size={18} /></button></div>}
         </div>}
       </section>
 
@@ -318,7 +327,7 @@ export default function App() {
     </main>
     <footer className="site-footer" hidden={immersive}><span>© 2026 林间绘本馆</span><span><span className="little-dot" /> 让一个温柔的故事，住进心里。</span><button onClick={() => openPanel('help')}>关于绘本馆 <ArrowRight size={13} /></button></footer>
 
-    {panel === 'help' && <Modal title="欢迎来到绘本世界。" onClose={() => openPanel(null)}><p className="dialog-intro">这是一座轻轻触碰，故事就会跃出纸页的小小图书馆。</p><ol className="help-steps"><li><BookOpen size={25} /><div><h3>打开一本喜欢的绘本</h3><p>点击书架上的绘本，或下方的书名。</p></div></li><li><HandPointing size={25} /><div><h3>和故事里的朋友打个招呼</h3><p>点击角色或发光的小物件。用手机时，轻轻触碰就好，也可以使用下方的按钮。</p></div></li><li><Star size={25} /><div><h3>收集属于你的故事礼物</h3><p>回答最后的小问题，就能领取礼物。收藏会保存在当前浏览器中。</p></div></li></ol><p className="quiet-note"><SpeakerHigh size={19} /> 第一次操作后，会响起轻柔的音乐。点击右上角的声音按钮，随时可以静音。</p><button className="primary-button full-width" onClick={() => openPanel(null)}>开始冒险吧 <ArrowRight size={18} /></button></Modal>}
-    {panel === 'collection' && <Modal title="我的故事收藏。" onClose={() => openPanel(null)}><p className="dialog-intro">把故事里遇见的温柔，好好收藏。 <strong>{treasures.length} / 3</strong></p><div className="treasure-list">{stories.map(book => { const owned = treasures.includes(book.id); return <div key={book.id} className={`treasure-item ${owned ? 'owned' : ''}`}><span className={`treasure-icon theme-${book.theme}`}>{owned ? <Star size={29} weight="duotone" /> : <BookmarkSimple size={26} />}</span><div><h3>{owned ? book.reward : '还有一份礼物，等你发现'}</h3><p>{book.title}</p></div>{owned && <Check size={18} />}</div>; })}</div><p className="quiet-note"><MoonStars size={19} /> {treasures.length ? '下次再来，这些礼物还会在这里。' : '读完一本绘本，就能收集一份礼物。'}</p><button className="primary-button full-width" onClick={() => openPanel(null)}>返回绘本 <ArrowRight size={18} /></button></Modal>}
+    {panel === 'help' && <Modal title="欢迎来到绘本世界。" onClose={() => openPanel(null)}><p className="dialog-intro">这是一座轻轻触碰，故事就会跃出纸页的小小图书馆。</p><ol className="help-steps"><li><BookOpen size={25} /><div><h3>打开一本喜欢的绘本</h3><p>点击书架上的绘本，或下方的书名。</p></div></li><li><HandPointing size={25} /><div><h3>陪朋友发现线索、试试办法</h3><p>跟着提示轻触画面，也可以使用下方的按钮。不用着急，每一步都由你决定。</p></div></li><li><Star size={25} /><div><h3>收好这段故事的小纪念</h3><p>读完就能收下书签。最后的问题可以选一选，也可以和身边的人聊聊；不用答对才拿礼物。收藏会保存在当前浏览器中。</p></div></li></ol><p className="quiet-note"><SpeakerHigh size={19} /> 第一次操作后，会响起轻柔的音乐。点击右上角的声音按钮，随时可以静音。</p><button className="primary-button full-width" onClick={() => openPanel(null)}>开始冒险吧 <ArrowRight size={18} /></button></Modal>}
+    {panel === 'collection' && <Modal title="我的故事收藏。" onClose={() => openPanel(null)}><p className="dialog-intro">把故事里遇见的温柔，好好收藏。 <strong>{treasures.length} / {stories.length}</strong></p><div className="treasure-list">{stories.map(book => { const owned = treasures.includes(book.id); return <div key={book.id} className={`treasure-item ${owned ? 'owned' : ''}`}><span className={`treasure-icon theme-${book.theme}`}>{owned ? <Star size={29} weight="duotone" /> : <BookmarkSimple size={26} />}</span><div><h3>{owned ? book.reward : '还有一份礼物，等你发现'}</h3><p>{book.title}</p></div>{owned && <Check size={18} />}</div>; })}</div><p className="quiet-note"><MoonStars size={19} /> {treasures.length ? '下次再来，这些礼物还会在这里。' : '读完一本绘本，就能收集一份礼物。'}</p><button className="primary-button full-width" onClick={() => openPanel(null)}>返回绘本 <ArrowRight size={18} /></button></Modal>}
   </div>;
 }

@@ -121,6 +121,18 @@ export class AudioEngine {
     } catch { /* Sound effects are optional. */ }
   }
 
+  storyBell(echo = false): void {
+    const context = this.readyContext();
+    if (!context) return;
+    try {
+      const now = context.currentTime;
+      [0, .22].forEach(offset => {
+        this.bell(84, now + offset, .065, .35);
+        if (echo) this.bell(84, now + .76 + offset, .028, .35);
+      });
+    } catch { /* The visible echo and story text also carry this clue. */ }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

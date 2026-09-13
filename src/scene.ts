@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { stories } from './stories';
 
 type Callbacks = {
   onSelect: (index: number) => void;
@@ -10,8 +11,6 @@ type Callbacks = {
 type Mode = 'shelf' | 'opening' | 'story' | 'turning' | 'closing' | 'celebrating';
 type AnimatedItem = { object: THREE.Object3D; scale: THREE.Vector3; delay: number };
 type Tween = { start: number; duration: number; update: (t: number) => void; done: () => void };
-const COLORS = ['#a7bfaa', '#9dbbc8', '#e6b19a'];
-const TITLES = [['迷路的', '小星星'], ['鲸鱼与', '海的彼岸'], ['云端的', '失物']];
 const INK = '#34483c';
 const ease = (x: number) => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 const clamp = THREE.MathUtils.clamp;
@@ -27,13 +26,14 @@ export class StoryWorld {
   private readonly pointer = new THREE.Vector2();
   private readonly target = new THREE.Vector3(0, 1.94, -.8);
   private readonly shelf = new THREE.Group();
+  private readonly upperShelf = new THREE.Group();
   private readonly decor = new THREE.Group();
   private readonly popup = new THREE.Group();
   private readonly particles = new THREE.Group();
   private readonly books: THREE.Group[] = [];
   private readonly covers: THREE.Group[] = [];
   private readonly leftPages: THREE.Group[] = [];
-  private readonly bookHome: { position: THREE.Vector3; rotation: THREE.Euler }[] = [];
+  private readonly bookHome: { position: THREE.Vector3; rotation: THREE.Euler; scale: number }[] = [];
   private readonly interactiveObjects: THREE.Object3D[] = [];
   private readonly tweens: Tween[] = [];
   private readonly popupItems: AnimatedItem[] = [];
@@ -59,6 +59,7 @@ export class StoryWorld {
   private safeBottomInset = 0;
   private selected = 0;
   private currentPage = 0;
+  private completedActions = 0;
   private mode: Mode = 'shelf';
   private interactive = false;
   private locked = false;
@@ -182,14 +183,19 @@ export class StoryWorld {
     board.position.set(0, 1.01, -2.35);
     const edge = this.round(12.3, .055, .085, .025, woodEdge, this.shelf);
     edge.position.set(0, .982, -1.51);
+    const upperBoard = this.round(12.4, .22, 1.7, .08, wood, this.upperShelf);
+    upperBoard.position.set(0, 4.01, -2.35);
+    const upperEdge = this.round(12.3, .055, .085, .025, woodEdge, this.upperShelf);
+    upperEdge.position.set(0, 3.982, -1.51);
+    this.shelf.add(this.upperShelf);
     for (const x of [-4.5, 4.5]) {
       const bracket = this.round(.14, .62, .7, .05, wood, this.shelf);
       bracket.position.set(x, .65, -2.7);
     }
     this.shelf.position.y = -.75; this.decor.position.y = -.75;
     this.scene.add(this.shelf, this.decor);
-    this.makePlant(this.decor, -5.55, 1.12, -2.2);
-    this.makeLamp(this.decor, 5.42, 1.12, -2.25);
+    this.makePlant(this.decor, -5.95, 1.12, -2.2);
+    this.makeLamp(this.decor, 5.95, 1.12, -2.25);
     this.makeMushroom(this.decor, -4.85, 1.12, -1.97, .46);
     const pebbleMat = this.material('#e0dbc5');
     this.ball(4.8, 1.23, -1.88, .28, .12, .21, pebbleMat, this.decor);
@@ -232,7 +238,8 @@ export class StoryWorld {
   private coverTexture(index: number) {
     const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 1000;
     const c = canvas.getContext('2d')!;
-    c.fillStyle = COLORS[index]; c.fillRect(0, 0, 768, 1000);
+    const { cover } = stories[index];
+    c.fillStyle = cover.color; c.fillRect(0, 0, 768, 1000);
     const ellipse = (x: number, y: number, rx: number, ry: number, color: string, angle = 0) => {
       c.fillStyle = color; c.beginPath(); c.ellipse(x, y, rx, ry, angle, 0, Math.PI * 2); c.fill();
     };
@@ -252,9 +259,9 @@ export class StoryWorld {
     c.fillStyle = index === 1 ? '#f5f2df' : INK;
     c.textAlign = 'center';
     c.font = '500 61px "Songti SC", "STSong", "SimSun", serif';
-    c.fillText(TITLES[index][0], 388, 155);
+    c.fillText(cover.lines[0], 388, 155);
     c.font = '500 77px "Songti SC", "STSong", "SimSun", serif';
-    c.fillText(TITLES[index][1], 388, 252);
+    c.fillText(cover.lines[1], 388, 252);
     if (index === 0) {
       ellipse(393, 804, 306, 186, '#87a88e');
       ellipse(275, 848, 297, 133, '#74957c');
@@ -298,7 +305,7 @@ export class StoryWorld {
         c.strokeStyle = 'rgba(241,249,241,.6)'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.stroke();
       }
       star(572, 437, 35, '#eee0ab', .25);
-    } else {
+    } else if (index === 2) {
       ellipse(631, 436, 84, 84, '#f0d09b');
       for (const [x, y, s] of [[146, 465, 1], [627, 641, .9], [216, 778, 1.3], [422, 859, 1.4]]) {
         ellipse(x, y, 81 * s, 28 * s, '#f7e5d2'); ellipse(x - 28 * s, y - 19 * s, 30 * s, 31 * s, '#f7e5d2'); ellipse(x + 19 * s, y - 25 * s, 41 * s, 40 * s, '#f7e5d2');
@@ -315,6 +322,57 @@ export class StoryWorld {
       ellipse(365, 807, 25, 17, '#604c3b'); ellipse(428, 807, 25, 17, '#604c3b');
       star(266, 661, 33, '#f9eab8', -.2);
       for (const [x, y] of [[183, 364], [528, 342], [616, 753]]) star(x, y, 10, '#fff0d1');
+    } else if (index === 3) {
+      ellipse(400, 871, 340, 175, '#bf905e');
+      for (const [x, y, angle] of [[104, 446, -.5], [634, 404, .5], [144, 833, -.7], [647, 773, .6], [520, 352, -.8]]) {
+        ellipse(x, y, 24, 49, y % 2 ? '#ac7048' : '#f4d194', angle);
+        c.strokeStyle = '#9f7650'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - 12, y + 29); c.lineTo(x + 12, y - 29); c.stroke();
+      }
+      // A curled squirrel tail, two little helpers, and a walnut almost as big as its owner.
+      ellipse(250, 651, 94, 151, '#a96943', -.5); ellipse(236, 591, 67, 87, '#c18350', -.35);
+      ellipse(289, 733, 67, 84, '#b57448'); ellipse(322, 578, 77, 72, '#cb8f59');
+      ellipse(282, 505, 19, 35, '#cb8f59', -.22); ellipse(351, 502, 19, 35, '#cb8f59', .15);
+      ellipse(327, 610, 45, 31, '#f5dfb7'); ellipse(299, 573, 6, 9, '#513f30'); ellipse(351, 573, 6, 9, '#513f30');
+      ellipse(326, 602, 7, 5, '#513f30'); ellipse(350, 721, 24, 45, '#cb8f59', -.8);
+      ellipse(287, 815, 29, 16, '#8e5c3e');
+      ellipse(451, 750, 116, 112, '#ae7849'); ellipse(445, 738, 103, 103, '#ca965c');
+      c.strokeStyle = '#95623e'; c.lineWidth = 5; c.beginPath(); c.moveTo(453, 641); c.bezierCurveTo(422, 691, 477, 766, 454, 852); c.stroke();
+      for (let i = 0; i < 5; i++) {
+        c.beginPath(); c.ellipse(388 + i * 30, 746, 14, 63 - Math.abs(2 - i) * 13, -.12, -.9, 2.2); c.stroke();
+      }
+      ellipse(610, 760, 44, 61, '#e0bd77'); ellipse(610, 683, 48, 45, '#fff3db');
+      ellipse(590, 626, 13, 41, '#fff3db', -.14); ellipse(625, 624, 13, 43, '#fff3db', .15);
+      ellipse(592, 683, 4, 6, '#514e3c'); ellipse(626, 683, 4, 6, '#514e3c');
+      ellipse(566, 753, 17, 29, '#fff3db', .7);
+      ellipse(173, 822, 55, 42, '#84614a'); ellipse(191, 833, 34, 28, '#edcda5'); ellipse(202, 824, 4, 5, '#513f30');
+      for (let i = 0; i < 6; i++) {
+        c.strokeStyle = '#5f4e3b'; c.lineWidth = 5; c.beginPath(); c.moveTo(136 + i * 10, 805); c.lineTo(129 + i * 11, 784 - Math.sin(i) * 7); c.stroke();
+      }
+    } else {
+      ellipse(390, 883, 332, 158, '#8fae9f');
+      ellipse(505, 859, 150, 23, '#c5d9cf');
+      c.strokeStyle = '#d7e5d9'; c.lineWidth = 4; c.lineCap = 'round';
+      for (let i = 0; i < 21; i++) {
+        const x = 90 + (i * 127) % 590; const y = 315 + (i * 79) % 475;
+        if (x > 170 && x < 620 && y > 490) continue;
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x - 8, y + 24); c.stroke();
+      }
+      ellipse(300, 744, 94, 115, '#a77957'); ellipse(301, 614, 100, 88, '#b98c63');
+      ellipse(229, 548, 30, 33, '#b98c63'); ellipse(369, 548, 30, 33, '#b98c63');
+      ellipse(229, 548, 16, 18, '#dfb893'); ellipse(369, 548, 16, 18, '#dfb893');
+      ellipse(300, 651, 48, 34, '#e5c59d'); ellipse(268, 607, 7, 10, '#4f4234'); ellipse(336, 607, 7, 10, '#4f4234'); ellipse(302, 641, 13, 10, '#4f4234');
+      ellipse(297, 761, 58, 72, '#c99c70'); ellipse(235, 838, 38, 23, '#91664d'); ellipse(363, 838, 38, 23, '#91664d');
+      ellipse(397, 724, 30, 55, '#b98c63', -.7);
+      ellipse(520, 783, 49, 63, '#d7b971'); ellipse(518, 704, 53, 48, '#fff3df');
+      ellipse(496, 646, 14, 47, '#fff3df', -.12); ellipse(537, 643, 14, 49, '#fff3df', .15);
+      ellipse(499, 706, 4, 7, '#4f493b'); ellipse(537, 706, 4, 7, '#4f493b');
+      ellipse(521, 794, 34, 35, '#ebd7a9');
+      c.strokeStyle = '#668353'; c.lineWidth = 12; c.beginPath(); c.moveTo(430, 735); c.quadraticCurveTo(443, 612, 429, 469); c.stroke();
+      c.fillStyle = '#668f63'; c.beginPath(); c.moveTo(158, 511); c.bezierCurveTo(205, 312, 542, 331, 658, 529); c.bezierCurveTo(495, 505, 372, 570, 158, 511); c.fill();
+      c.strokeStyle = '#acc295'; c.lineWidth = 4; c.beginPath(); c.moveTo(181, 506); c.quadraticCurveTo(425, 433, 635, 524); c.stroke();
+      for (let i = 0; i < 5; i++) {
+        c.beginPath(); c.moveTo(254 + i * 69, 480); c.lineTo(249 + i * 57, 408 + Math.abs(i - 2) * 16); c.stroke();
+      }
     }
     c.fillStyle = index === 1 ? '#eaf0df' : 'rgba(60,73,49,.72)';
     c.font = '24px "PingFang SC", "Microsoft YaHei", sans-serif'; c.fillText('小小绘本 · 大大冒险', 389, 945);
@@ -330,9 +388,9 @@ export class StoryWorld {
   }
 
   private makeBooks() {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < stories.length; i++) {
       const group = new THREE.Group(); group.userData.bookIndex = i;
-      const coverMat = this.material(COLORS[i]);
+      const coverMat = this.material(stories[i].cover.color);
       const paper = this.material('#fff9e9', { map: this.paperTexture });
       const block = this.round(2.57, 3.38, .22, .025, paper, group); block.position.z = .005;
       const back = this.round(2.7, 3.55, .055, .025, coverMat, group); back.position.z = -.144;
@@ -361,16 +419,21 @@ export class StoryWorld {
   }
 
   private positionShelfBooks() {
-    const narrow = this.immersive ? this.shelfLayoutNarrow : this.width / this.height < 1.45;
+    const narrow = this.immersive ? this.shelfLayoutNarrow : this.width <= 760;
     if (!this.immersive) this.shelfLayoutNarrow = narrow;
-    const spacing = narrow ? 2.92 : 3.24;
+    const scale = narrow ? .74 : .76;
     for (let i = 0; i < this.books.length; i++) {
-      const position = new THREE.Vector3((i - 1) * spacing, 2.175, -2.3 + (i === 1 ? .12 : 0));
-      const rotation = new THREE.Euler(0, i === 0 ? .075 : i === 2 ? -.075 : 0, i === 0 ? -.025 : i === 2 ? .023 : 0);
-      this.bookHome[i] = { position, rotation };
-      if (this.mode === 'shelf') { this.books[i].position.copy(position); this.books[i].rotation.copy(rotation); }
+      const upperRow = narrow && i < 3;
+      const column = narrow ? upperRow ? i - 1 : i - 3.5 : i - (this.books.length - 1) / 2;
+      const position = new THREE.Vector3(column * (narrow ? 2.4 : 2.18), .30 + 1.775 * scale + (upperRow ? 3 : 0), -2.3);
+      const rotation = new THREE.Euler(0, -column * .024, -column * .006);
+      this.bookHome[i] = { position, rotation, scale };
+      if (this.mode === 'shelf') {
+        this.books[i].position.copy(position); this.books[i].rotation.copy(rotation); this.books[i].scale.setScalar(scale);
+      }
     }
-    this.shelf.scale.x = narrow ? .80 : 1;
+    this.upperShelf.visible = narrow;
+    this.shelf.scale.x = narrow ? .65 : 1;
     this.decor.visible = !narrow;
   }
 
@@ -396,6 +459,7 @@ export class StoryWorld {
     const right = this.ball(.29, 2.40, .02, .18, .66, .17, fur, g); right.rotation.z = -.13;
     const li = this.ball(-.30, 2.43, .145, .085, .46, .03, pink, g); li.rotation.z = .13;
     const ri = this.ball(.30, 2.44, .145, .085, .48, .03, pink, g); ri.rotation.z = -.13;
+    g.userData.ears = [left, right, li, ri];
     this.ball(-.235, 1.70, .576, .065, .088, .045, eye, g); this.ball(.235, 1.70, .576, .065, .088, .045, eye, g);
     this.ball(-.252, 1.725, .611, .018, .021, .012, this.material('#fffef6'), g);
     this.ball(.218, 1.725, .611, .018, .021, .012, this.material('#fffef6'), g);
@@ -458,6 +522,121 @@ export class StoryWorld {
     return g;
   }
 
+  private makeSquirrel() {
+    const g = new THREE.Group(); const fur = this.material('#bd8150'); const cream = this.material('#f1d8ad');
+    const tail = new THREE.Group(); tail.position.set(-.52, .60, -.24); tail.rotation.z = -.28; g.add(tail);
+    this.ball(-.20, .54, 0, .47, .84, .32, this.material('#a76d45'), tail);
+    this.ball(-.18, .94, .11, .37, .43, .24, fur, tail);
+    const curl = this.mesh(new THREE.TorusGeometry(.23, .065, 10, 28, Math.PI * 1.55), cream, tail);
+    curl.position.set(-.12, 1.0, .30); curl.rotation.z = -.7;
+    this.ball(0, .67, .02, .43, .58, .37, fur, g);
+    this.ball(0, .70, .32, .28, .40, .09, cream, g);
+    this.ball(.03, 1.44, .05, .52, .46, .45, fur, g);
+    for (const x of [-.28, .31]) {
+      const ear = this.ball(x, 1.92, .03, .14, .28, .12, fur, g); ear.rotation.z = x < 0 ? .16 : -.16;
+      this.ball(x, 1.95, .13, .07, .16, .025, this.material('#dca58a'), g);
+    }
+    this.ball(.03, 1.29, .40, .34, .20, .15, cream, g);
+    const ink = this.material('#554532');
+    for (const x of [-.16, .23]) {
+      this.ball(x, 1.50, .456, .047, .068, .033, ink, g);
+      this.ball(x - .012, 1.519, .48, .013, .017, .010, cream, g);
+    }
+    this.ball(.035, 1.32, .548, .058, .042, .034, ink, g);
+    for (const x of [-.22, .24]) this.ball(x, .12, .15, .20, .12, .27, fur, g);
+    const armL = this.ball(-.39, .80, .15, .14, .29, .14, fur, g); armL.rotation.z = -.4;
+    const arm = this.ball(.40, .82, .17, .14, .29, .14, fur, g); arm.rotation.z = .55; g.userData.arm = arm;
+    // A moss-green neckerchief distinguishes 松松 from the fox in the cloud story.
+    const scarf = this.mesh(new THREE.TorusGeometry(.27, .073, 8, 24), this.material('#829a6c'), g);
+    scarf.rotation.x = Math.PI / 2; scarf.position.y = 1.10;
+    return g;
+  }
+
+  private makeBear() {
+    const g = new THREE.Group(); const fur = this.material('#ad805d'); const cream = this.material('#dec099');
+    this.ball(0, .78, 0, .63, .76, .48, fur, g);
+    this.ball(0, .76, .40, .39, .48, .105, this.material('#cda276'), g);
+    this.ball(0, 1.68, .02, .65, .60, .53, fur, g);
+    for (const x of [-.47, .47]) {
+      this.ball(x, 2.17, 0, .22, .23, .14, fur, g);
+      this.ball(x, 2.18, .12, .12, .13, .035, cream, g);
+      this.ball(x * .62, .15, .14, .29, .17, .34, fur, g);
+    }
+    this.ball(0, 1.48, .48, .31, .24, .15, cream, g);
+    const ink = this.material('#524534');
+    for (const x of [-.23, .23]) {
+      this.ball(x, 1.76, .502, .055, .075, .04, ink, g);
+      this.ball(x - .01, 1.78, .53, .015, .018, .01, cream, g);
+    }
+    this.ball(0, 1.56, .637, .10, .075, .055, ink, g);
+    const mouth = this.mesh(new THREE.TorusGeometry(.07, .009, 6, 16, Math.PI), ink, g);
+    mouth.position.set(0, 1.42, .627); mouth.rotation.z = Math.PI;
+    this.ball(-.58, .90, .07, .23, .40, .22, fur, g).rotation.z = -.23;
+    const arm = this.ball(.58, .97, .15, .23, .40, .22, fur, g); arm.rotation.z = .65; g.userData.arm = arm;
+    return g;
+  }
+
+  private makeHedgehog() {
+    const g = new THREE.Group(); const brown = this.material('#8f7256'); const cream = this.material('#e4c9a2');
+    this.ball(0, .46, 0, .55, .45, .40, brown, g);
+    this.ball(.19, .42, .27, .36, .29, .25, cream, g);
+    for (let i = 0; i < 11; i++) {
+      const angle = -.85 + i / 10 * 1.75;
+      const spike = this.mesh(new THREE.ConeGeometry(.10, .25, 5), brown, g);
+      spike.position.set(Math.sin(angle) * .51, .44 + Math.cos(angle) * .43, -.05 + (i % 2) * .13); spike.rotation.z = -angle;
+    }
+    const ink = this.material('#524735');
+    this.ball(.05, .51, .50, .034, .044, .025, ink, g); this.ball(.31, .51, .48, .034, .044, .025, ink, g);
+    this.ball(.21, .38, .54, .055, .04, .035, ink, g);
+    for (const x of [-.23, .29]) this.ball(x, .10, .15, .13, .10, .19, cream, g);
+    const arm = this.ball(.47, .34, .24, .13, .18, .12, cream, g); g.userData.arm = arm;
+    return g;
+  }
+
+  private makeWalnut() {
+    const g = new THREE.Group(); const halves: THREE.Group[] = [];
+    for (let side = 0; side < 2; side++) {
+      const half = new THREE.Group(); half.rotation.y = side * Math.PI; g.add(half); halves.push(half);
+      const shell = this.mesh(new THREE.SphereGeometry(.6, 28, 20, 0, Math.PI), this.material('#bb8955'), half);
+      shell.scale.set(.94, 1, .84);
+      const inside = this.mesh(new THREE.SphereGeometry(.578, 28, 20, 0, Math.PI), this.material('#d8b886', { side: THREE.BackSide }), half);
+      inside.scale.copy(shell.scale);
+      const rim = this.mesh(new THREE.TorusGeometry(.59, .023, 8, 36), this.material('#94653e'), half); rim.scale.x = .94;
+      for (let i = 0; i < 5; i++) {
+        const points: THREE.Vector3[] = [];
+        for (let j = 0; j <= 18; j++) {
+          const theta = .22 + j / 18 * (Math.PI - .44); const phi = .28 + i * .62 + Math.sin(j * 1.1 + i) * .10;
+          points.push(new THREE.Vector3(-Math.cos(phi) * Math.sin(theta) * .574, Math.cos(theta) * .61, Math.sin(phi) * Math.sin(theta) * .516));
+        }
+        this.mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 24, .023, 6, false), this.material('#a07043'), half);
+      }
+    }
+    g.userData.halves = halves;
+    return g;
+  }
+
+  private makeLeafUmbrella() {
+    const g = new THREE.Group(); const green = this.material('#799d6a', { map: this.paperTexture, side: THREE.DoubleSide });
+    const shape = new THREE.Shape(); shape.moveTo(-1.19, 0);
+    shape.bezierCurveTo(-.65, .83, .69, .77, 1.22, 0); shape.bezierCurveTo(.56, -.69, -.65, -.67, -1.19, 0);
+    const geometry = new THREE.ExtrudeGeometry(shape, { depth: .025, bevelEnabled: true, bevelThickness: .014, bevelSize: .014, bevelSegments: 2, steps: 1, curveSegments: 20 });
+    const vertices = geometry.getAttribute('position');
+    for (let i = 0; i < vertices.count; i++) vertices.setZ(i, vertices.getZ(i) + .18 * (1 - Math.pow(vertices.getX(i) / 1.3, 2)));
+    geometry.computeVertexNormals();
+    const leaf = this.mesh(geometry, green, g); leaf.rotation.x = -Math.PI / 2; leaf.position.y = 1.60;
+    const veinMat = this.material('#bed0a0'); const stemMat = this.material('#688254');
+    const stem = new THREE.CatmullRomCurve3([new THREE.Vector3(0, .05, .02), new THREE.Vector3(.06, .57, .01), new THREE.Vector3(-.03, 1.17, 0), new THREE.Vector3(0, 1.79, 0)]);
+    this.mesh(new THREE.TubeGeometry(stem, 24, .034, 8, false), stemMat, g);
+    const midrib = new THREE.CatmullRomCurve3([new THREE.Vector3(-1.12, 1.67, 0), new THREE.Vector3(0, 1.81, 0), new THREE.Vector3(1.17, 1.66, 0)]);
+    this.mesh(new THREE.TubeGeometry(midrib, 28, .019, 6, false), veinMat, g);
+    for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const x = -.66 + i * .43;
+      const vein = new THREE.CatmullRomCurve3([new THREE.Vector3(x, 1.80 - x * x * .1, 0), new THREE.Vector3(x + .07, 1.78 - x * x * .1, side * .18), new THREE.Vector3(x + .12, 1.76 - x * x * .1, side * .30)]);
+      this.mesh(new THREE.TubeGeometry(vein, 12, .009, 5, false), veinMat, g);
+    }
+    return g;
+  }
+
   private makeStar(color = '#f5d380', face = true) {
     const g = new THREE.Group();
     const shape = new THREE.Shape();
@@ -488,6 +667,8 @@ export class StoryWorld {
     const ribbon = this.material('#a6b99c');
     const l = this.ball(-.14, .30, 0, .14, .08, .05, ribbon, g); l.rotation.z = -.3;
     const r = this.ball(.14, .30, 0, .14, .08, .05, ribbon, g); r.rotation.z = .3;
+    const end = this.round(.065, .23, .025, .012, ribbon, g);
+    end.position.set(-.20, .17, .07); end.rotation.z = -.25;
     return g;
   }
 
@@ -560,97 +741,337 @@ export class StoryWorld {
     object.scale.setScalar(0);
   }
 
+  private addStoryProp(name: string, object: THREE.Object3D, delay = .18) {
+    this.storyProps.set(name, object);
+    this.addPopup(object, delay);
+    return object;
+  }
+
+  private makeLightPatch(radius: number, color = '#f4d990') {
+    const patch = this.mesh(new THREE.CircleGeometry(radius, 32), this.material(color, {
+      emissive: color, emissiveIntensity: .35, transparent: true, opacity: .72, depthWrite: false,
+    }));
+    patch.rotation.x = -Math.PI / 2;
+    patch.castShadow = false;
+    return patch;
+  }
+
   private makeScene(page: number) {
     this.disposePopup();
     this.storyProps.clear();
+    this.completedActions = 0;
     this.popup.position.set(0, .08, 1.25);
     const palette = this.selected;
+    if (stories[palette].theme === 'autumn') { this.makeAutumnScene(page); return; }
+    if (stories[palette].theme === 'rain') { this.makeRainScene(page); return; }
     const hero = palette === 1 ? this.makeWhale() : palette === 2 ? this.makeFox() : this.makeRabbit();
     hero.scale.setScalar(palette === 1 ? .84 : .77);
-    hero.position.set(page === 2 ? -.9 : -.67, 0, .27);
+    hero.position.set(palette === 0 && page === 2 ? -1.35 : -.80, 0, .27);
     hero.rotation.y = .11;
     this.hero = hero;
-    this.addPopup(hero, .08);
-    this.interactiveObjects.push(hero);
-    const star = palette === 2 && page !== 2 ? this.makeBell() : palette === 1 && page === 3 ? this.makeSun() : this.makeStar();
-    this.starBaseY = page === 3 ? 2.1 : page === 1 ? .66 : 1.05;
-    star.position.set(page === 2 ? 1.17 : 1.04, this.starBaseY, page === 1 ? .39 : .19);
-    star.scale.setScalar(page === 3 ? .85 : .78);
-    star.rotation.z = -.10;
+    this.addStoryProp('hero', hero, .08);
+    const star = palette === 1 ? this.makeSun() : palette === 2 && page < 2 ? this.makeBell() : this.makeStar();
+    star.scale.setScalar(.78);
+    star.position.set(palette === 1 ? 1.28 : 1.04, palette === 1 ? 2.22 : palette === 0 && page === 3 ? 2.40 : 1.05, .19);
     this.star = star;
-    this.addPopup(star, .25); this.interactiveObjects.push(star);
-    const colorA = palette === 0 ? '#95af8c' : palette === 1 ? '#8eb8b4' : '#d1b694';
-    const colorB = palette === 0 ? '#bdc79f' : palette === 1 ? '#b5c8b3' : '#c7c69f';
-    // Low illustrated paper islands leave the faces clearly visible from the camera.
-    const island = this.mesh(new THREE.CircleGeometry(1.72, 48), this.material(palette === 0 ? '#d3ddbd' : palette === 1 ? '#b8d2d0' : '#f0dcb9'), undefined);
+    this.addStoryProp(palette === 2 && page < 2 ? 'bell' : 'star', star, .25);
+    const island = this.mesh(new THREE.CircleGeometry(1.72, 48), this.material(palette === 0 ? '#d3ddbd' : palette === 1 ? '#b8d2d0' : '#eee2cf'));
     island.rotation.x = -Math.PI / 2; island.scale.set(1.25, .69, 1); island.position.set(0, .009, .03); island.castShadow = false;
     this.addPopup(island);
-    if (palette === 1) {
-      for (let i = 0; i < 5; i++) {
-        const seaweed = this.makeTree(i % 2 ? '#9aafa0' : '#90b0aa', 1.1 + (i % 3) * .25, 0);
-        seaweed.position.set(i < 3 ? -2.02 + i * .33 : 1.67 + (i - 3) * .38, 0, -.73 + (i % 2) * .20);
-        seaweed.rotation.z = Math.sin(i) * .17; this.addPopup(seaweed, .09 + i * .025);
-      }
-      const coral = this.makeCoral(); coral.position.set(1.62, 0, .56); this.addPopup(coral, .15); this.interactiveObjects.push(coral);
-      const shell = new THREE.Group();
-      const shellMat = this.material('#e4c5b2');
-      for (let i = 0; i < 7; i++) {
-        const rib = this.ball(0, .25, 0, .075, .34, .14, shellMat, shell); rib.rotation.z = (i - 3) * .19;
-      }
-      shell.position.set(1.76, .06, .91); shell.rotation.x = -.25; this.addPopup(shell, .23); this.interactiveObjects.push(shell);
-      for (let i = 0; i < 5; i++) {
-        const bubble = this.mesh(new THREE.SphereGeometry(.06 + i * .012, 16, 12), this.material('#def0ec', { transparent: true, opacity: .52, roughness: .12 }), undefined);
-        bubble.position.set(1.65 + Math.sin(i * 2) * .3, .8 + i * .31, -.45); this.addPopup(bubble, .16 + i * .05);
-      }
-    } else {
-      for (const [x, z, h, color, style] of [[-2.02, -.63, 1.85, colorA, 0], [-1.53, -1.03, 2.37, colorB, 0], [2.03, -.85, 2.05, colorA, 1], [1.50, -1.07, 1.69, colorB, 0]] as const) {
-        const tree = this.makeTree(color, h, style); tree.position.set(x, 0, z); tree.rotation.y = x < 0 ? .13 : -.15; this.addPopup(tree, .12 + Math.abs(x) * .015); this.interactiveObjects.push(tree); if (h > 2.2) this.storyProps.set('tree', tree);
-      }
-      this.addPopup(this.makeMushroom(new THREE.Group(), -1.91, 0, .98, .67), .23);
-      const mushroom = this.makeMushroom(new THREE.Group(), 1.95, 0, .70, .64); this.addPopup(mushroom, .24); this.interactiveObjects.push(mushroom); this.storyProps.set('mushroom', mushroom);
-      for (const [x, z, color] of [[-1.4, .88, '#f1d195'], [1.72, .18, '#e4b6a2'], [.38, 1.05, '#f1d195']] as const) this.addPopup(this.makeFlower(x, z, color), .29);
+    if (palette === 0) this.makeForestScene(page);
+    else if (palette === 1) this.makeSeaScene(page);
+    else this.makeSkyScene(page);
+    this.starBaseY = star.position.y;
+  }
+
+  private makeAutumnScene(page: number) {
+    const backdrop = this.round(4.9, 2.62, .045, .22, this.material('#edd8ae', { map: this.paperTexture }));
+    backdrop.position.set(0, 1.17, -1.34); this.addPopup(backdrop, .04);
+    for (const [x, z, h, color] of [[-2.03, -.76, 1.91, '#c79455'], [-1.40, -1.04, 2.22, '#d7ab62'], [1.51, -1.08, 2.17, '#ba7953'], [2.08, -.72, 1.75, '#d6b36a']] as const) {
+      const tree = this.makeTree(color, h); tree.position.set(x, 0, z); this.addPopup(tree, .13);
     }
-    if (page === 1 && palette !== 2) {
-      // A small paper bridge is the second spread's physical story prop.
-      const bridge = new THREE.Group(); bridge.position.set(.77, 0, .35);
-      const beamMat = this.material(palette === 1 ? '#c5d6c7' : '#c4aa82');
-      for (let i = 0; i < 7; i++) {
-        const plank = this.round(.145, .065, .57, .016, beamMat, bridge); plank.position.set((i - 3) * .17, .15 + Math.sin(i / 6 * Math.PI) * .15, 0);
-      }
-      for (const x of [-.56, .56]) for (const z of [-.27, .27]) { const pole = this.round(.05, .47, .05, .012, beamMat, bridge); pole.position.set(x, .235, z); }
-      this.addPopup(bridge, .12); this.interactiveObjects.push(bridge);
+    const ground = this.mesh(new THREE.CircleGeometry(1.85, 48), this.material('#ddc49b'));
+    ground.rotation.x = -Math.PI / 2; ground.scale.set(1.20, .72, 1); ground.position.y = .012; this.addPopup(ground);
+    for (let i = 0; i < 12; i++) {
+      const leaf = new THREE.Group(); const color = this.material(i % 2 ? '#c49a59' : '#b98053');
+      const blade = this.ball(0, .026, 0, .14, .018, .072, color, leaf); blade.rotation.y = i * .9;
+      leaf.position.set(Math.sin(i * 2.4) * 1.88, 0, Math.cos(i * 2.4) * .88); this.addPopup(leaf, .20);
     }
-    if (page === 1 && palette === 2) {
-      const bridge = new THREE.Group();
-      for (let i = 0; i < 4; i++) {
-        const cloud = this.makeCloud(); cloud.scale.setScalar(.42);
-        cloud.position.set(-.1 + i * .48, .40 + (i % 2) * .51, .35 + Math.sin(i) * .14); bridge.add(cloud);
-      }
-      this.addPopup(bridge, .22); this.interactiveObjects.push(bridge); this.storyProps.set('clouds', bridge);
+    const hero = this.makeSquirrel(); hero.scale.setScalar(page === 0 ? .77 : .65);
+    hero.position.set(page === 2 ? -1.45 : -1.07, 0, .20); hero.rotation.y = .10;
+    this.hero = hero; this.addStoryProp('hero', hero, .08);
+    const walnut = this.makeWalnut(); walnut.position.set(page === 2 ? -.48 : page === 0 ? .15 : .02, page === 3 ? .98 : .62, .23);
+    this.star = walnut; this.addStoryProp('walnut', walnut, .20);
+    if (page > 0) {
+      const friend = this.makeRabbit(); friend.scale.setScalar(.46);
+      friend.position.set(page === 2 ? .60 : 1.25, 0, page === 2 ? -.25 : .12); friend.rotation.y = -.25;
+      this.addStoryProp('friend', friend, .17);
+      const helper = this.makeHedgehog(); helper.scale.setScalar(.68);
+      helper.position.set(page === 2 ? -1.10 : page === 1 ? 1.55 : -.52, 0, .91);
+      this.addStoryProp('helper', helper, .23);
     }
-    if (page === 2 || palette === 2) {
-      const cloud = this.makeCloud(); cloud.position.set(.85, page === 2 ? 1.62 : 1.93, -.76); cloud.scale.setScalar(.85); this.addPopup(cloud, .2); this.interactiveObjects.push(cloud);
-      if (page === 2) {
-        const ladder = new THREE.Group(); ladder.position.set(.75, 0, -.24); ladder.rotation.z = -.16;
-        const mat = this.material('#baa27d');
-        for (const x of [-.20, .20]) { const rail = this.round(.04, 1.77, .045, .01, mat, ladder); rail.position.set(x, .885, 0); }
-        for (let i = 0; i < 6; i++) { const rung = this.round(.43, .035, .04, .01, mat, ladder); rung.position.y = .16 + i * .27; }
-        this.addPopup(ladder, .12); this.interactiveObjects.push(ladder);
+    if (page === 1) {
+      const puddle = this.makeLightPatch(.53, '#a9c0b6'); puddle.position.set(1.37, .025, .73); this.addPopup(puddle);
+      const slope = this.round(2.13, .085, .73, .04, this.material('#c8ad7d'));
+      slope.position.set(-.53, .105, .02); slope.rotation.z = -.095; this.addPopup(slope);
+    }
+    if (page === 2) {
+      const root = this.mesh(new THREE.CylinderGeometry(.12, .15, 1.32, 16), this.material('#9b7753'));
+      root.rotation.x = Math.PI / 2; root.position.set(.20, .14, .20); this.addStoryProp('root', root);
+      const bark = new THREE.Group(); const wood = this.material('#ba8e5e', { map: this.paperTexture });
+      for (const side of [-1, 1]) {
+        const half = this.round(.85, .075, .89, .028, wood, bark); half.position.set(side * .40, .115, 0); half.rotation.z = -side * .27;
+        for (let i = 0; i < 3; i++) {
+          const grain = this.round(.70, .006, .013, .003, this.material('#977449'), half); grain.position.set(0, .041, (i - 1) * .22);
+        }
       }
+      bark.position.set(.60, .025, 1.07); bark.rotation.y = -.22; this.addStoryProp('bark', bark, .22);
     }
     if (page === 3) {
-      const arch = new THREE.Group(); arch.position.set(.35, 0, -.78);
-      const paletteColors = ['#d7ae94', '#e4c38d', '#b6c6a0'];
-      for (let i = 0; i < 3; i++) {
-        const arc = this.mesh(new THREE.TorusGeometry(1.48 - i * .115, .054, 8, 48, Math.PI), this.material(paletteColors[i]), arch);
-        arc.position.y = .79;
+      const stump = new THREE.Group();
+      const side = this.mesh(new THREE.CylinderGeometry(.91, .96, .35, 36), this.material('#b68c5f'), stump); side.position.y = .18;
+      const top = this.mesh(new THREE.CircleGeometry(.91, 36), this.material('#e0c092'), stump); top.rotation.x = -Math.PI / 2; top.position.y = .36;
+      for (const radius of [.31, .55, .76]) {
+        const ring = this.mesh(new THREE.TorusGeometry(radius, .011, 6, 36), this.material('#c39c69'), stump); ring.rotation.x = Math.PI / 2; ring.position.y = .365;
       }
-      this.addPopup(arch, .17);
-      for (let i = 0; i < 4; i++) {
-        const tinyStar = this.makeStar('#f6d993', false); tinyStar.scale.setScalar(.20); tinyStar.position.set(-1.34 + i * .88, 2.15 + Math.sin(i * 1.3) * .45, -.3);
-        tinyStar.rotation.z = i * .3; this.addPopup(tinyStar, .2 + i * .035);
+      stump.position.z = .08; this.addPopup(stump);
+      const kernels = new THREE.Group(); kernels.visible = false;
+      for (let i = 0; i < 3; i++) {
+        const plate = new THREE.Group(); plate.position.set((i - 1) * .77, .035, 1.05);
+        this.ball(0, 0, 0, .33, .017, .18, this.material('#aab27a'), plate); this.addPopup(plate);
+        const piece = new THREE.Group(); piece.position.copy(walnut.position); piece.userData.destination = new THREE.Vector3((i - 1) * .77, .12, 1.05);
+        for (let j = 0; j < 3; j++) this.ball((j - 1) * .085, 0, 0, .075, .08, .10, this.material('#f1d29a'), piece);
+        kernels.add(piece);
+      }
+      this.addStoryProp('kernels', kernels, .24);
+    }
+  }
+
+  private makeRainScene(page: number) {
+    const backdrop = this.round(4.9, 2.74, .045, .22, this.material('#b4c9c5', { map: this.paperTexture }));
+    backdrop.position.set(0, 1.22, -1.36); this.addPopup(backdrop, .04);
+    const ground = this.mesh(new THREE.CircleGeometry(1.85, 48), this.material('#b8c9aa'));
+    ground.rotation.x = -Math.PI / 2; ground.scale.set(1.24, .73, 1); ground.position.y = .013; this.addPopup(ground);
+    for (const [x, h] of [[-2.08, 2.30], [1.93, 2.10]] as const) {
+      const tree = this.makeTree('#87a88d', h); tree.position.set(x, 0, -.90); this.addPopup(tree, .13);
+    }
+    const rain = new THREE.Group(); const rainMat = this.material('#dbe7df', { transparent: true, opacity: .75 });
+    for (let i = 0; i < 22; i++) {
+      const drop = this.round(.018, .15, .015, .007, rainMat, rain);
+      drop.position.set(-2.25 + (i * .73) % 4.5, .27 + (i * .57) % 2.17, -1.23); drop.rotation.z = -.18;
+      drop.userData.origin = drop.position.clone(); drop.castShadow = false;
+    }
+    this.addStoryProp('rainfall', rain, .10);
+    const puddle = this.makeLightPatch(page === 3 ? .92 : .46, '#9fbdb6'); puddle.position.set(.42, .028, .76); puddle.scale.y = .62; this.addPopup(puddle);
+    const hero = this.makeBear(); hero.scale.setScalar(page === 3 ? .62 : .72); hero.rotation.y = .10;
+    hero.position.set(page === 3 ? -1.51 : -1.03, 0, page === 3 ? -.32 : .14); this.hero = hero; this.addStoryProp('hero', hero, .08);
+    if (page === 1) (hero.userData.arm as THREE.Object3D).position.set(.68, 1.48, .15);
+    const friend = this.makeRabbit(); friend.scale.setScalar(.48); friend.rotation.y = -.12;
+    friend.position.set(page === 3 ? .02 : 1.05, 0, .35);
+    const ears = friend.userData.ears as THREE.Object3D[];
+    if (page < 2) ears.forEach((ear, i) => { ear.rotation.z += i % 2 ? -.40 : .40; });
+    if (page === 3) (friend.userData.arm as THREE.Object3D).rotation.z = 1.20;
+    const bag = new THREE.Group(); bag.position.set(0, .62, .66);
+    this.ball(0, 0, 0, .31, .33, .17, this.material('#ead5a9'), bag);
+    const tie = this.mesh(new THREE.TorusGeometry(.13, .024, 7, 20), this.material('#9da575'), bag); tie.rotation.x = Math.PI / 2; tie.position.y = .26;
+    this.ball(0, .16, .175, .05, .085, .02, this.material('#889b6c'), bag); friend.add(bag);
+    this.addStoryProp('friend', friend, .18);
+    const umbrella = this.makeLeafUmbrella();
+    umbrella.position.set(page === 0 ? -.65 : page === 1 ? -.54 : page === 2 ? 1.42 : .39, page === 0 ? .62 : page === 1 ? .91 : page === 2 ? .015 : .30, page >= 2 ? .67 : .30);
+    umbrella.rotation.z = page === 2 ? .19 : -.025; this.star = umbrella; this.addStoryProp('umbrella', umbrella, .21);
+    if (page < 2) {
+      const wetDrops = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const drop = this.ball(1.05 + side * .17, 1.20, .55, .032, .074, .025, this.material('#8aafa9'), wetDrops); drop.rotation.z = side * .18;
+      }
+      this.addStoryProp('wet-drops', wetDrops, .22);
+    }
+    if (page === 0) {
+      const bush = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const branch = new THREE.Group(); branch.position.set(side * .28, 0, 0);
+        this.ball(0, .39, 0, .42, .47, .18, this.material('#72967e'), branch);
+        this.ball(side * .08, .75, -.03, .25, .33, .13, this.material('#8baa86'), branch); bush.add(branch);
+      }
+      bush.position.set(1.06, 0, .71); this.addStoryProp('bush', bush, .18);
+    }
+    if (page >= 2) {
+      const home = new THREE.Group();
+      this.round(1.17, 2.16, .49, .24, this.material('#ac9876'), home).position.y = 1.03;
+      this.round(.71, 1.18, .04, .32, this.material('#675f4c'), home).position.set(0, .58, .266);
+      this.ball(-.36, 2.05, -.04, .71, .48, .16, this.material('#789575'), home);
+      this.ball(.35, 2.18, -.07, .65, .43, .16, this.material('#91aa82'), home);
+      home.position.set(-1.55, 0, -.81); this.addStoryProp('tree-home', home, .12);
+    }
+    if (page === 3) {
+      for (let i = 0; i < 3; i++) {
+        const stone = new THREE.Group(); this.ball(0, .07, 0, .22, .07, .18, this.material('#d1d0b9'), stone);
+        stone.position.set(.35 + i * .40, 0, .69 - i * .14); this.addPopup(stone);
+      }
+      const house = new THREE.Group();
+      this.round(.88, .78, .45, .07, this.material('#e6d5b0'), house).position.y = .39;
+      const roof = this.mesh(new THREE.ConeGeometry(.70, .56, 4), this.material('#b18e71'), house); roof.rotation.y = Math.PI / 4; roof.position.y = 1.05;
+      this.round(.32, .56, .03, .10, this.material('#8d9e7a'), house).position.set(0, .29, .246);
+      house.position.set(1.83, 0, -.81); this.addStoryProp('rabbit-home', house, .15);
+    }
+  }
+
+  private makeForestScene(page: number) {
+    const night = this.round(4.85, 2.72, .045, .22, this.material('#596f73', { map: this.paperTexture }));
+    night.position.set(0, 1.25, -1.32); this.addPopup(night, .04);
+    const moon = this.mesh(new THREE.SphereGeometry(.16, 20, 14), this.material('#e9dfb6', { emissive: '#f5e6b3', emissiveIntensity: .18 }));
+    moon.position.set(-.65, 2.31, -1.26); moon.scale.z = .20; this.addPopup(moon, .12);
+    const ears = this.hero!.userData.ears as THREE.Object3D[];
+    if (page !== 2) ears.forEach((ear, i) => { ear.rotation.z += i % 2 ? -.20 : .20; });
+    for (const [x, z, h, color, style] of [[-2.02, -.63, 1.85, '#95af8c', 0], [-1.53, -1.03, 2.37, '#bdc79f', 0], [2.03, -.85, 2.05, '#95af8c', 1], [1.50, -1.07, 1.69, '#bdc79f', 0]] as const) {
+      const tree = this.makeTree(color, page === 3 ? h * .62 : h, style);
+      tree.position.set(x, 0, z); tree.rotation.z = x === -1.53 ? .14 : 0;
+      this.addPopup(tree, .14);
+    }
+    this.addPopup(this.makeMushroom(new THREE.Group(), -1.91, 0, .98, .67), .23);
+    this.addPopup(this.makeFlower(-1.40, .88, '#f1d195'), .29);
+    if (page !== 2) this.addPopup(this.makeMushroom(new THREE.Group(), 1.95, 0, .70, .64), .24);
+    const light = this.makeLightPatch(.43);
+    light.position.set(.7, .025, .66);
+    this.addStoryProp('footlight', light);
+    if (page === 0) {
+      this.star!.position.set(1.0, .87, .3);
+      light.visible = false;
+      const bush = new THREE.Group(); bush.position.set(1, 0, .52);
+      for (const side of [-1, 1]) {
+        const leaves = new THREE.Group(); leaves.position.x = side * .27;
+        const material = this.material(side === 1 ? '#7f9b77' : '#9aaf85');
+        this.ball(0, .38, 0, .38, .38, .22, material, leaves);
+        this.ball(side * .08, .74, -.01, .26, .40, .17, material, leaves);
+        this.ball(-side * .12, .99, -.03, .17, .28, .12, material, leaves);
+        bush.add(leaves);
+      }
+      this.addStoryProp('bush', bush);
+    } else if (page === 1) {
+      this.star!.position.set(-.15, .96, .52);
+      light.position.x = -.15;
+      const branches = new THREE.Group(); branches.position.set(1.13, 0, .07);
+      for (const shadow of [true, false]) {
+        const fork = new THREE.Group();
+        const material = this.material(shadow ? '#627263' : '#bb9563', shadow ? { transparent: true, opacity: .72 } : {});
+        for (const side of [-1, 1]) {
+          const stem = this.round(.11, 1.22, .07, .03, material, fork);
+          stem.position.set(side * .15, .61, 0); stem.rotation.z = -side * .27;
+          const tip = this.round(.12, .50, .07, .03, material, fork);
+          tip.position.set(side * .21, 1.42, 0); tip.rotation.z = side * .43;
+        }
+        fork.scale.setScalar(shadow ? 1.35 : .76);
+        fork.position.z = shadow ? -.12 : .1;
+        branches.add(fork);
+        if (shadow) this.storyProps.set('shadow', fork);
+      }
+      this.addStoryProp('branches', branches);
+    } else if (page === 2) {
+      this.star!.position.set(-.76, .93, .52);
+      light.position.x = -.76;
+      for (let i = 0; i < 3; i++) {
+        const path = new THREE.Group(); path.position.set(-.35 + i * .65, .035, .88 - i * .24);
+        const patch = this.makeLightPatch(.29, '#e8d8ac'); (patch.material as THREE.MeshStandardMaterial).emissiveIntensity = .04;
+        path.add(patch);
+        const print = this.material('#a49c79');
+        this.ball(-.08, .012, .03, .032, .014, .065, print, path);
+        this.ball(.06, .012, -.04, .032, .014, .065, print, path);
+        this.addStoryProp(`path-${i}`, path);
+      }
+      const pebble = this.ball(-.52, .07, 1.03, .13, .07, .09, this.material('#b7b3a0'), new THREE.Group());
+      this.addPopup(pebble);
+      this.addPopup(this.makeMushroom(new THREE.Group(), 1.17, 0, .64, .37), .24);
+    } else {
+      light.position.set(-1.46, .024, .92);
+      this.makeNightStars(true);
+    }
+  }
+
+  private makeSeaScene(page: number) {
+    for (let i = 0; i < 4; i++) {
+      const seaweed = this.makeTree(i % 2 ? '#9aafa0' : '#90b0aa', 1.1 + (i % 3) * .25);
+      seaweed.position.set(i < 2 ? -2.02 + i * .33 : 1.67 + (i - 2) * .38, 0, -.73);
+      seaweed.rotation.z = Math.sin(i) * .17; this.addPopup(seaweed, .16);
+    }
+    const coral = this.makeCoral(); coral.position.set(1.72, 0, .67); this.addPopup(coral);
+    const light = new THREE.Group(); light.position.set(.81, .04, .64);
+    for (let i = 0; i < 5; i++) {
+      const glint = this.makeLightPatch(.10 + (i % 2) * .06);
+      glint.position.set(Math.sin(i * 2.4) * .30, i * .002, Math.cos(i * 2.4) * .18);
+      glint.scale.set(1.5, .65, 1); light.add(glint);
+    }
+    light.visible = page !== 1; this.addStoryProp('light', light);
+    const cloud = this.makeCloud(); cloud.position.set(1.18, 1.91, .43); cloud.scale.setScalar(.82);
+    cloud.visible = page < 2; this.addStoryProp('cloud', cloud);
+    const from = this.star!.position.clone();
+    const to = page < 2 ? light.position.clone() : new THREE.Vector3(-.89, 1.72, .28);
+    const beam = this.mesh(new THREE.CylinderGeometry(.06, .23, from.distanceTo(to), 16), this.material('#ffe4a3', { transparent: true, opacity: .20, emissive: '#ffe4a3', emissiveIntensity: .45, depthWrite: false }));
+    beam.position.copy(from).add(to).multiplyScalar(.5);
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), from.clone().sub(to).normalize());
+    beam.castShadow = false; beam.visible = page > 1; this.addStoryProp('sunbeam', beam);
+    const drops = this.hero!.userData.spout as THREE.Object3D[];
+    drops.forEach(drop => { drop.userData.fullScale = drop.scale.clone(); drop.scale.multiplyScalar(page === 2 ? .42 : .12); });
+    if (page >= 2) {
+      const rainbow = new THREE.Group(); rainbow.position.set(-.24, .87, -.42);
+      ['#d9a48b', '#e4c77f', '#acc6a0', '#95b7bf'].forEach((color, i) => {
+        const arc = this.mesh(new THREE.TorusGeometry(1.24 - i * .115, .046, 8, 48, Math.PI), this.material(color), rainbow);
+        arc.position.y = .17;
+      });
+      rainbow.visible = false; this.addStoryProp('rainbow', rainbow);
+    }
+    if (page === 3) {
+      for (const [index, x] of [-1.93, 1.42].entries()) {
+        const friend = this.makeWhale(); friend.position.set(x, .02, .94); friend.scale.setScalar(.34);
+        (friend.userData.spout as THREE.Object3D[]).forEach((drop, i) => {
+          drop.visible = false;
+          if (index === 1 && i === 1) this.storyProps.set('friend-drop', drop);
+        });
+        this.addStoryProp(`friend-${index}`, friend, .25);
       }
     }
+  }
+
+  private makeSkyScene(page: number) {
+    for (const [x, z, scale] of [[-1.85, .34, .54], [1.67, .64, .50], [-1.2, -.85, .74]] as const) {
+      const cloud = this.makeCloud(); cloud.position.set(x, .02, z); cloud.scale.setScalar(scale); this.addPopup(cloud);
+    }
+    const cloud = this.makeCloud(); cloud.position.set(1.20, 1.30, -.15); cloud.scale.setScalar(.9);
+    this.addStoryProp('cloud', cloud);
+    const echo = new THREE.Group(); echo.position.set(1.14, 1.40, .56);
+    for (let i = 0; i < 3; i++) {
+      const arc = this.mesh(new THREE.TorusGeometry(.24 + i * .16, .015, 6, 24, Math.PI * .75), this.material('#bca674', { transparent: true, opacity: .64 }), echo);
+      arc.rotation.z = -Math.PI * .37;
+    }
+    echo.visible = page === 1; this.addStoryProp('echo', echo);
+    if (page === 0) this.star!.position.set(.66, .85, .6);
+    if (page === 1) {
+      this.star!.position.set(-.15, .95, .55);
+      const owner = this.makeStar(); owner.position.set(1.5, 1.56, -.42); owner.scale.setScalar(.51);
+      this.addStoryProp('owner', owner);
+    }
+    if (page >= 2) {
+      cloud.position.set(.4, 1.79, -.76); cloud.scale.setScalar(.7);
+      // addPopup remembers the final scale for page reveal.
+      this.popupItems.find(item => item.object === cloud)!.scale.copy(cloud.scale);
+      this.star!.position.set(1.0, 1.39, .24);
+      const ribbon = this.round(.07, .39, .025, .012, this.material('#839e73'), this.star!);
+      ribbon.position.set(-.18, -.36, .18); ribbon.rotation.z = -.17;
+      const bell = this.makeBell(); bell.scale.setScalar(.7);
+      bell.position.set(page === 2 ? -.18 : .85, page === 2 ? .89 : .83, .53);
+      this.addStoryProp('bell', bell);
+    }
+    if (page === 3) this.makeNightStars(false);
+  }
+
+  private makeNightStars(visible: boolean) {
+    const stars = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const star = this.makeStar('#f6d993', false); star.scale.setScalar(.20);
+      star.position.set(-1.60 + i * .78, 2.12 + Math.sin(i * 1.3) * .37, -.42);
+      stars.add(star);
+    }
+    stars.visible = visible;
+    this.addStoryProp('night-stars', stars, .25);
   }
 
   private async revealPopup() {
@@ -734,8 +1155,9 @@ export class StoryWorld {
     if (!this.immersive) {
       this.positionShelfBooks();
       if (this.mode === 'shelf') {
-        this.viewWidth = this.shelfLayoutNarrow ? 9.8 : 13.8;
+        this.viewWidth = this.shelfLayoutNarrow ? 8.8 : 13.8;
         this.shelfViewWidth = this.viewWidth;
+        this.target.set(0, this.shelfLayoutNarrow ? 2.9 : 1.94, -.8);
       }
     }
     this.updateCamera();
@@ -774,7 +1196,7 @@ export class StoryWorld {
   }
 
   async openBook(index: number) {
-    if (this.disposed || this.locked || this.mode !== 'shelf' || !Number.isInteger(index) || index < 0 || index > 2) return;
+    if (this.disposed || this.locked || this.mode !== 'shelf' || !Number.isInteger(index) || index < 0 || index >= stories.length) return;
     this.locked = true; this.interactive = false; this.selected = index; this.currentPage = 0; this.mode = 'opening'; this.hover = null;
     this.prepareBackdropFade();
     this.storyBackdropOpacity = this.immersive ? .055 : .18;
@@ -785,8 +1207,9 @@ export class StoryWorld {
     await this.tween(1190, t => {
       book.position.lerpVectors(startPosition, endPosition, t); book.position.y += Math.sin(t * Math.PI) * 1.02;
       book.quaternion.slerpQuaternions(startQuaternion, endQuaternion, t);
+      book.scale.setScalar(THREE.MathUtils.lerp(this.bookHome[index].scale, 1, t));
       this.fadeBackdrop(1 - t * (1 - this.storyBackdropOpacity));
-      this.books.forEach((other, i) => { if (i !== index) other.scale.setScalar(1 - t * .06); });
+      this.books.forEach((other, i) => { if (i !== index) other.scale.setScalar(this.bookHome[i].scale * (1 - t * .06)); });
     });
     if (this.disposed) return;
     await this.tween(810, t => { this.covers[index].rotation.y = -Math.PI * t; });
@@ -818,77 +1241,215 @@ export class StoryWorld {
     this.mode = 'story'; this.locked = false;
   }
 
-  async react() {
-    if (this.disposed || this.locked || this.mode !== 'story' || !this.hero || !this.star) return;
-    this.locked = true; this.interactive = false;
-    const hero = this.hero; const star = this.star;
-    const baseY = hero.position.y; const starStart = star.position.clone(); const starScale = star.scale.clone();
-    const arm = hero.userData.arm as THREE.Object3D | undefined; const baseArm = arm?.rotation.z ?? 0;
-    const mushroom = this.storyProps.get('mushroom');
-    const mushroomMaterials: THREE.MeshStandardMaterial[] = [];
-    if (this.selected === 0 && this.currentPage === 1 && mushroom) mushroom.traverse(object => {
-      if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) mushroomMaterials.push(object.material);
-    });
-    const clouds = this.storyProps.get('clouds');
-    const cloudStarts = clouds?.children.map(cloud => cloud.position.clone()) ?? [];
-    const spout = (hero.userData.spout ?? []) as THREE.Object3D[];
-    const spoutStarts = spout.map(drop => ({ position: drop.position.clone(), scale: drop.scale.clone() }));
-    let droplet: THREE.Group | null = null;
-    if (this.selected === 0 && this.currentPage === 2) {
-      droplet = this.makeStar('#f5dfa0', false); droplet.scale.setScalar(.15); droplet.position.set(-1.53, 2.34, -1.01); this.popup.add(droplet);
-    }
-    let rainbow: THREE.Group | null = null;
-    if (this.selected === 1 && this.currentPage === 2) {
-      rainbow = new THREE.Group(); rainbow.position.set(.25, .72, -.75);
-      ['#d9a48b', '#e4c77f', '#acc6a0', '#95b7bf'].forEach((color, i) => {
-        const arc = this.mesh(new THREE.TorusGeometry(1.37 - i * .115, .042, 8, 48, Math.PI), this.material(color), rainbow!);
-        arc.position.y = .20;
-      });
-      this.popup.add(rainbow); this.popupItems.push({ object: rainbow, scale: new THREE.Vector3(1, 1, 1), delay: 0 }); rainbow.scale.setScalar(0);
-    }
-    await this.tween(1140, t => {
+  private async reactAutumn(step: number) {
+    const hero = this.hero!; const walnut = this.star!;
+    const heroStart = hero.position.clone(); const walnutStart = walnut.position.clone();
+    const walnutRotation = walnut.rotation.z;
+    const friend = this.storyProps.get('friend'); const friendStart = friend?.position.clone();
+    const helper = this.storyProps.get('helper'); const helperStart = helper?.position.clone();
+    const bark = this.storyProps.get('bark'); const barkStart = bark?.position.clone();
+    const arm = hero.userData.arm as THREE.Object3D; const armStart = arm.rotation.z;
+    const halves = walnut.userData.halves as THREE.Group[];
+    const kernels = this.storyProps.get('kernels');
+    await this.tween(1500, t => {
       const wave = Math.sin(t * Math.PI);
-      hero.position.y = baseY + wave * .16;
-      hero.rotation.z = Math.sin(t * Math.PI * 2) * .055;
-      if (arm) arm.rotation.z = baseArm + Math.sin(t * Math.PI) * 1.0;
-      star.position.set(starStart.x - wave * .54, starStart.y + wave * .30, starStart.z + wave * .20);
-      star.rotation.z = -.1 + Math.sin(t * Math.PI * 2) * .18;
-      star.scale.copy(starScale).multiplyScalar(1 + wave * .13);
-      if (mushroomMaterials.length) {
-        mushroomMaterials.forEach(mat => { mat.emissive.set('#f2cb73'); mat.emissiveIntensity = wave * .48; });
-        star.scale.copy(starScale).multiplyScalar(1 + t * .12);
-      }
-      if (droplet) {
-        const progress = clamp(t * 1.3, 0, 1);
-        droplet.position.lerpVectors(new THREE.Vector3(-1.53, 2.34, -1.01), starStart, progress);
-        droplet.position.y += Math.sin(progress * Math.PI) * .42;
-        droplet.scale.setScalar(.15 * (1 - Math.max(0, (t - .7) / .3)));
-        star.scale.copy(starScale).multiplyScalar(1 + Math.max(0, t - .6) * .35);
-      }
-      if (rainbow) {
-        spout.forEach((drop, i) => {
-          const base = spoutStarts[i];
-          drop.position.set(base.position.x + Math.sin(t * Math.PI) * (i - 1) * .17, base.position.y + wave * .60, base.position.z);
-          drop.scale.copy(base.scale).multiplyScalar(1 + wave * .5);
+      arm.rotation.z = armStart + wave * .5;
+      if (this.currentPage === 0) {
+        walnut.position.x = walnutStart.x + .48 * t; walnut.rotation.z = walnutRotation - t * .8;
+        hero.position.x = heroStart.x + .35 * t; hero.rotation.z = -wave * .08;
+      } else if (this.currentPage === 1) {
+        const stop = 1 - Math.pow(1 - t, 3);
+        walnut.position.x = walnutStart.x + .43 * stop; walnut.rotation.z = walnutRotation - stop * .72;
+        friend!.position.x = friendStart!.x - wave * .10;
+        helper!.position.lerpVectors(helperStart!, new THREE.Vector3(.46, 0, .91), clamp(t * 1.6, 0, 1));
+        hero.position.x = heroStart.x + .24 * t;
+      } else if (this.currentPage === 2 && step === 0) {
+        bark!.position.lerpVectors(barkStart!, new THREE.Vector3(.20, .105, .20), t);
+        bark!.position.y += wave * .20; bark!.rotation.y = -.22 * (1 - t);
+      } else if (this.currentPage === 2) {
+        walnut.position.x = walnutStart.x + 1.51 * t; walnut.position.y = walnutStart.y + wave * .28;
+        walnut.rotation.z = walnutRotation - t * 2.51;
+        hero.position.x = heroStart.x + 1.22 * t; hero.position.y = heroStart.y + .29 * t + wave * .045;
+        friend!.position.x = friendStart!.x + 1.21 * t; helper!.position.x = helperStart!.x + 1.51 * t;
+      } else {
+        halves.forEach((half, i) => {
+          const side = i ? 1 : -1;
+          half.position.set(side * .56 * t, -.11 * t, -.55 * t);
+          half.rotation.x = -side * Math.PI / 2 * t;
         });
-        rainbow.scale.setScalar(ease(clamp((t - .30) / .7, 0, 1)));
+        kernels!.visible = t > .45;
+        kernels!.children.forEach((piece, i) => {
+          const progress = clamp((t - .45 - i * .06) / .42, 0, 1);
+          piece.position.lerpVectors(walnutStart, piece.userData.destination as THREE.Vector3, progress);
+          piece.position.y += Math.sin(progress * Math.PI) * .16;
+        });
       }
-      if (clouds && this.selected === 2 && this.currentPage === 1) clouds.children.forEach((cloud, i) => {
-        cloud.position.lerpVectors(cloudStarts[i], new THREE.Vector3(-.06 + i * .47, .14 + Math.sin(i / 3 * Math.PI) * .20, .44), t);
-      });
-      if (this.selected === 2 && (this.currentPage === 0 || this.currentPage === 3)) star.rotation.z = Math.sin(t * Math.PI * 6) * .32 * (1 - t);
+    });
+    hero.rotation.z = 0; arm.rotation.z = armStart;
+  }
+
+  private async reactRain() {
+    const hero = this.hero!; const umbrella = this.star!; const friend = this.storyProps.get('friend')!;
+    const umbrellaStart = umbrella.position.clone(); const umbrellaRotation = umbrella.rotation.z;
+    const heroStart = hero.position.clone();
+    const friendStart = friend.position.clone();
+    const bush = this.storyProps.get('bush'); const branchStarts = bush?.children.map(branch => branch.position.clone());
+    const ears = friend.userData.ears as THREE.Object3D[]; const earStarts = ears.map(ear => ear.rotation.z);
+    const arm = hero.userData.arm as THREE.Object3D; const armStart = arm.rotation.z;
+    const friendArm = friend.userData.arm as THREE.Object3D;
+    await this.tween(1450, t => {
+      const wave = Math.sin(t * Math.PI);
+      if (this.currentPage === 0) {
+        bush!.children.forEach((branch, i) => {
+          branch.position.copy(branchStarts![i]); branch.position.x += (i ? 1 : -1) * .48 * t; branch.rotation.z = (i ? -1 : 1) * .28 * t;
+        });
+        arm.rotation.z = armStart + wave * .5;
+      } else if (this.currentPage === 1) {
+        umbrella.position.lerpVectors(umbrellaStart, new THREE.Vector3(.55, .26, .61), t);
+        umbrella.rotation.z = THREE.MathUtils.lerp(umbrellaRotation, -.10, t);
+        hero.position.x = THREE.MathUtils.lerp(heroStart.x, -.08, t); arm.position.y = THREE.MathUtils.lerp(1.48, .97, t);
+        hero.rotation.z = -wave * .13; arm.rotation.z = armStart + wave * .65;
+        ears.forEach((ear, i) => { ear.rotation.z = earStarts[i] - (i % 2 ? -.40 : .40) * t; });
+        this.storyProps.get('wet-drops')!.visible = t < .65;
+      } else if (this.currentPage === 2) {
+        umbrella.position.lerpVectors(umbrellaStart, new THREE.Vector3(1.42, .30, .67), t);
+        umbrella.rotation.z = THREE.MathUtils.lerp(umbrellaRotation, -.025, t);
+        friendArm.rotation.z = .35 + t * .85;
+        arm.rotation.z = armStart + Math.sin(t * Math.PI) * .7;
+      } else {
+        const walk = Math.abs(Math.sin(t * Math.PI * 3)) * .075;
+        friend.position.lerpVectors(friendStart, new THREE.Vector3(1.40, 0, .18), t); friend.position.y += walk;
+        umbrella.position.copy(umbrellaStart).add(friend.position.clone().sub(friendStart));
+        arm.rotation.z = armStart + wave * .45 + Math.sin(t * Math.PI * 4) * .14;
+      }
+    });
+    hero.rotation.z = 0; arm.rotation.z = armStart;
+  }
+
+  async react(step = 0) {
+    if (this.disposed || this.locked || this.mode !== 'story' || !this.hero || !this.star || step !== this.completedActions) return;
+    const action = stories[this.selected].scenes[this.currentPage].actions[step];
+    if (!action) return;
+    this.locked = true; this.interactive = false;
+    const theme = stories[this.selected].theme;
+    if (theme === 'autumn' || theme === 'rain') {
+      if (theme === 'autumn') await this.reactAutumn(step);
+      else await this.reactRain();
+      if (this.disposed) return;
+      this.completedActions += 1; this.locked = false;
+      return;
+    }
+    const hero = this.hero; const star = this.star;
+    const heroStart = hero.position.clone(); const starStart = star.position.clone();
+    const arm = hero.userData.arm as THREE.Object3D | undefined; const baseArm = arm?.rotation.z ?? 0;
+    const target = this.storyProps.get(action.target)!;
+    const targetStart = target.position.clone();
+    const light = this.storyProps.get(this.selected === 0 ? 'footlight' : 'light');
+    const lightStart = light?.position.clone();
+    const lightParts = light?.children.map(part => part.position.clone()) ?? [];
+    const cloud = this.storyProps.get('cloud'); const cloudStart = cloud?.position.clone();
+    const shadow = this.storyProps.get('shadow');
+    const bushStarts = target.children.map(branch => branch.position.clone());
+    const spout = (hero.userData.spout ?? []) as THREE.Object3D[];
+    const spoutStarts = spout.map(drop => drop.position.clone());
+    const rainbow = this.storyProps.get('rainbow');
+    const echo = this.storyProps.get('echo');
+    const nightStars = this.storyProps.get('night-stars');
+    const bell = this.storyProps.get('bell');
+    const ears = (hero.userData.ears ?? []) as THREE.Object3D[];
+    const earStarts = ears.map(ear => ear.rotation.z);
+    await this.tween(this.selected === 2 && this.currentPage === 0 ? 1500 : 1200, t => {
+      const wave = Math.sin(t * Math.PI);
+      if (this.selected === 0) {
+        if (this.currentPage === 0) {
+          target.children.forEach((branch, i) => {
+            branch.position.copy(bushStarts[i]); branch.position.x += (i ? 1 : -1) * t * .45;
+            branch.rotation.z = (i ? -1 : 1) * t * .3;
+          });
+          const reach = clamp((t - .25) / .75, 0, 1);
+          star.position.lerpVectors(starStart, new THREE.Vector3(-.20, .96, .52), reach);
+          if (arm) arm.rotation.z = baseArm + wave * .8;
+          light!.visible = t > .3;
+          light!.position.set(star.position.x, .025, .70);
+        } else if (this.currentPage === 1) {
+          star.position.lerpVectors(starStart, new THREE.Vector3(.30, 1.10, .45), t);
+          shadow!.scale.setScalar(1.35 - t * .90);
+          shadow!.traverse(object => {
+            if (object instanceof THREE.Mesh) (object.material as THREE.MeshStandardMaterial).opacity = .72 * (1 - t);
+          });
+          light!.position.lerpVectors(lightStart!, new THREE.Vector3(1.08, .025, .22), t);
+        } else if (this.currentPage === 2) {
+          // The next pool of light moves first; the rabbit follows only this short, visible section.
+          const starProgress = clamp(t * 1.4, 0, 1);
+          const walkProgress = clamp((t - .20) / .80, 0, 1);
+          star.position.lerpVectors(starStart, new THREE.Vector3(target.position.x + .18, .93, target.position.z), starProgress);
+          hero.position.lerpVectors(heroStart, new THREE.Vector3(target.position.x - .38, 0, target.position.z - .50), walkProgress);
+          hero.position.y += wave * .035;
+          light!.position.set(star.position.x, .025, star.position.z);
+          const material = (target.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
+          material.emissiveIntensity = .12 + t * .55;
+        } else {
+          hero.position.lerpVectors(heroStart, heroStart.clone().add(new THREE.Vector3(-.48, 0, .17)), t);
+          hero.position.y += wave * .05;
+          star.rotation.z = -.10 + wave * .15;
+          ears.forEach((ear, i) => { ear.rotation.z = earStarts[i] + Math.sin(t * Math.PI * 4) * .06 * (1 - t); });
+        }
+      } else if (this.selected === 1) {
+        if (this.currentPage === 0) {
+          hero.position.x = heroStart.x + .36 * t;
+          hero.rotation.z = -wave * .07;
+          light!.position.x = lightStart!.x + t * .38;
+          light!.children.forEach((part, i) => {
+            part.position.copy(lightParts[i]);
+            part.position.x += Math.sin(i * 2.4) * wave * .45;
+            part.position.z += Math.cos(i * 2.4) * wave * .30;
+          });
+        } else if (this.currentPage === 1) {
+          cloud!.position.x = cloudStart!.x - t * 1.14;
+          const beam = this.storyProps.get('sunbeam') as THREE.Mesh;
+          beam.visible = t > .15;
+          (beam.material as THREE.MeshStandardMaterial).opacity = .20 * t;
+          light!.visible = t > .25;
+          light!.children.forEach(part => { ((part as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = .72 * t; });
+        } else {
+          hero.rotation.z = wave * .055;
+          if (arm) arm.rotation.z = baseArm - wave * .3;
+          spout.forEach((drop, i) => {
+            drop.position.copy(spoutStarts[i]); drop.position.y += wave * .42;
+            drop.position.x += wave * (i - 1) * .16;
+            drop.scale.copy(drop.userData.fullScale as THREE.Vector3).multiplyScalar(.42 + Math.min(t * 3, 1) * .58);
+          });
+          rainbow!.visible = t > .2;
+          rainbow!.scale.setScalar(ease(clamp((t - .2) / .8, 0, 1)));
+          const friendDrop = this.storyProps.get('friend-drop');
+          if (friendDrop) friendDrop.visible = t > .78;
+        }
+      } else {
+        if (this.currentPage === 0) {
+          bell!.rotation.z = Math.sin(clamp(t * 2, 0, 1) * Math.PI * 4) * .28 * (1 - t);
+          bell!.position.lerpVectors(targetStart, new THREE.Vector3(-.15, .95, .55), t);
+          echo!.visible = t > .48 && t < .97;
+          echo!.scale.setScalar(.7 + Math.abs(Math.sin(t * Math.PI * 4)) * .4);
+        } else if (this.currentPage === 1) {
+          echo!.scale.setScalar(1 - t); echo!.visible = t < 1;
+          cloud!.position.x = cloudStart!.x - t * .50;
+          hero.rotation.y = .11 + t * .30;
+          bell!.rotation.z = -.10;
+        } else if (this.currentPage === 2) {
+          bell!.position.lerpVectors(targetStart, new THREE.Vector3(.85, .83, .53), t);
+          if (arm) arm.rotation.z = baseArm + wave * .8;
+        } else {
+          bell!.rotation.z = Math.sin(t * Math.PI * 4) * .28 * (1 - t);
+          nightStars!.visible = t > .15;
+          nightStars!.children.forEach((smallStar, i) => smallStar.scale.setScalar(.20 * clamp((t - .15 - i * .1) / .30, 0, 1)));
+        }
+      }
     });
     if (this.disposed) return;
-    mushroomMaterials.forEach(mat => { mat.emissiveIntensity = .11; });
-    if (droplet) { this.disposeObject(droplet); droplet.removeFromParent(); }
-    spout.forEach((drop, i) => { drop.position.copy(spoutStarts[i].position); drop.scale.copy(spoutStarts[i].scale); });
-    hero.position.y = baseY; hero.rotation.z = 0; if (arm) arm.rotation.z = baseArm;
-    star.position.copy(starStart); star.scale.copy(starScale); star.rotation.z = -.1;
-    if (this.selected === 0 && this.currentPage === 3) {
-      const origin = star.position.clone();
-      await this.tween(700, t => { star.position.lerpVectors(origin, new THREE.Vector3(.45, 2.70, -.23), t); star.rotation.z = -.1 + t * .15; });
-      this.starBaseY = 2.70;
-    }
+    hero.rotation.z = 0; if (arm) arm.rotation.z = baseArm;
+    if (shadow) shadow.visible = false;
+    this.starBaseY = star.position.y;
+    this.completedActions += 1;
     this.locked = false;
   }
 
@@ -901,12 +1462,13 @@ export class StoryWorld {
     if (this.disposed) return;
     const book = this.books[this.selected]; const startPosition = book.position.clone(); const startQuaternion = book.quaternion.clone();
     const home = this.bookHome[this.selected]; const endQuaternion = new THREE.Quaternion().setFromEuler(home.rotation);
-    const cameraMove = this.cameraTo(new THREE.Vector3(0, 1.94, -.8), this.immersive ? this.shelfViewWidth : this.shelfLayoutNarrow ? 9.8 : 13.8, 1180, 6.8, 6.28, false);
+    const cameraMove = this.cameraTo(new THREE.Vector3(0, this.shelfLayoutNarrow ? 2.9 : 1.94, -.8), this.immersive ? this.shelfViewWidth : this.shelfLayoutNarrow ? 8.8 : 13.8, 1180, 6.8, 6.28, false);
     await this.tween(1180, t => {
       book.position.lerpVectors(startPosition, home.position, t); book.position.y += Math.sin(t * Math.PI) * 1.0;
       book.quaternion.slerpQuaternions(startQuaternion, endQuaternion, t);
+      book.scale.setScalar(THREE.MathUtils.lerp(1, home.scale, t));
       this.fadeBackdrop(this.storyBackdropOpacity + t * (1 - this.storyBackdropOpacity));
-      this.books.forEach((other, i) => { if (i !== this.selected) other.scale.setScalar(.94 + t * .06); });
+      this.books.forEach((other, i) => { if (i !== this.selected) other.scale.setScalar(this.bookHome[i].scale * (.94 + t * .06)); });
     });
     await cameraMove;
     this.fadeBackdrop(1, true);
@@ -936,15 +1498,36 @@ export class StoryWorld {
     this.mode = 'story'; this.locked = false;
   }
 
-  setInteractive(value: boolean) {
+  setInteractive(value: boolean, step = 0) {
     this.interactive = value;
-    if (!value) { this.hover = null; this.renderer.domElement.style.cursor = ''; }
+    this.interactiveObjects.length = 0;
+    const action = stories[this.selected].scenes[this.currentPage].actions[step];
+    const target = action ? this.storyProps.get(action.target) : null;
+    if (value && target) this.interactiveObjects.push(target);
+    this.hover = null; this.renderer.domElement.style.cursor = '';
+    // Only the next reachable section is offered as a canvas action.
+    if (this.selected === 0 && this.currentPage === 2) {
+      for (let i = 0; i < 3; i++) {
+        const path = this.storyProps.get(`path-${i}`);
+        if (!path) continue;
+        const material = (path.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
+        material.emissiveIntensity = i < step ? .67 : i === step ? .35 : .04;
+        material.opacity = i <= step ? .90 : .42;
+      }
+    }
   }
 
   getInteractionPoint(): { x: number; y: number } | null {
-    if (!this.hero || this.mode !== 'story') return null;
-    const world = new THREE.Vector3(0, this.selected === 1 ? 1 : 1.5, .4);
-    this.hero.localToWorld(world); world.project(this.camera);
+    const target = this.interactiveObjects[0];
+    if (!target || this.mode !== 'story') return null;
+    target.updateWorldMatrix(true, true);
+    let mesh: THREE.Mesh | null = null;
+    target.traverseVisible(object => { if (!mesh && object instanceof THREE.Mesh) mesh = object; });
+    if (!mesh) return null;
+    const surface = mesh as THREE.Mesh;
+    surface.geometry.computeBoundingBox();
+    const world = surface.geometry.boundingBox!.getCenter(new THREE.Vector3());
+    surface.localToWorld(world); world.project(this.camera);
     const rect = this.renderer.domElement.getBoundingClientRect();
     return { x: rect.left + (world.x + 1) * rect.width / 2, y: rect.top + (1 - world.y) * rect.height / 2 };
   }
@@ -977,6 +1560,8 @@ export class StoryWorld {
   getDebugState() {
     return { mode: this.mode, selected: this.selected, page: this.currentPage, locked: this.locked, interactive: this.interactive, immersive: this.immersive,
       shelfLayoutNarrow: this.shelfLayoutNarrow, cameraView: { width: this.camera.right - this.camera.left, height: this.camera.top - this.camera.bottom }, safeInsets: { top: this.safeTopInset, bottom: this.safeBottomInset },
+      completedActions: this.completedActions, heroPosition: this.hero?.position.toArray(),
+      props: Object.fromEntries([...this.storyProps].map(([name, object]) => [name, { visible: object.visible, position: object.position.toArray(), scale: object.scale.toArray() }])),
       popupCount: this.popupItems.length, popupsVisible: this.popup.visible && this.popupItems.some(i => i.object.scale.length() > .01),
       width: this.width, height: this.height, heroBounds: this.hero ? this.getScreenBounds(this.hero) : null, starBounds: this.star ? this.getScreenBounds(this.star) : null, interactionPoint: this.getInteractionPoint(),
       books: this.books.map(book => { const p = book.getWorldPosition(new THREE.Vector3()).project(this.camera); const r = this.renderer.domElement.getBoundingClientRect(); return { x: r.left + (p.x + 1) * r.width / 2, y: r.top + (1 - p.y) * r.height / 2, bounds: this.getScreenBounds(book) }; }) };
@@ -1028,8 +1613,12 @@ export class StoryWorld {
         book.position.y = THREE.MathUtils.lerp(book.position.y, goal, .1);
       });
       if (this.mode === 'story' && !this.locked) {
-        if (this.star) this.star.position.y = this.starBaseY + Math.sin(elapsed * 1.6) * .048;
+        if (this.star && this.selected < 3) this.star.position.y = this.starBaseY + Math.sin(elapsed * 1.6) * .048;
         if (this.hero) this.hero.rotation.z = Math.sin(elapsed * 1.1) * .012;
+        this.storyProps.get('rainfall')?.children.forEach((drop, i) => {
+          const origin = drop.userData.origin as THREE.Vector3;
+          drop.position.y = .25 + ((origin.y + 2.4 - elapsed * .65 - i * .07) % 2.4 + 2.4) % 2.4;
+        });
       }
       this.particles.children.forEach((particle, i) => {
         const origin = particle.userData.origin as THREE.Vector3;
