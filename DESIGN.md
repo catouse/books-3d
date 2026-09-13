@@ -38,9 +38,9 @@ components:
 
 ## Overview
 
-A quiet children's library made of paper and pale wood, with real rounded miniature characters unfolding from a physical book. Audience: children and adults reading together at a desk or on a phone. The current user instruction requires Chinese throughout the site, preserving the brief’s soft colors, warm light, and connected movement. This is an interactive story product with a small editorial shell, not a marketing landing page.
+A quiet children's library made of paper and pale wood, with real rounded miniature characters unfolding from a physical book. Audience: children aged 6–8, reading independently or with an adult at a desk or on a phone. The current user instruction requires Chinese throughout the site, preserving the brief’s soft colors, warm light, and connected movement. This is an interactive story product with a small editorial shell, not a marketing landing page.
 
-The signature is a continuous spatial handoff: a cover on the shelf becomes a book on the reading table, and its paper world opens without replacing the canvas. Controls stay outside faces and illustrations. The three thematic books share the same state machine and component styles.
+The signature is a continuous spatial handoff: a cover on the shelf becomes a book on the reading table, and its paper world opens without replacing the canvas. Controls stay outside faces and illustrations. The five thematic books share the same state machine and component styles.
 
 Simplified Chinese is the sole content locale (`zh-CN`), per the user’s language correction. Market jurisdiction is unspecified; this is a local reading experience with no accounts, commerce, identity input or remote user data. Use short, friendly Chinese sentences and natural Chinese punctuation. Cover illustrations, story copy, quizzes, controls, errors and accessible names follow the same language. Keep story IDs and the storage key unchanged so existing collections persist. No imitation cultural motifs. Local system fonts prevent external loading delays. No critical regulated copy exists.
 
@@ -48,7 +48,7 @@ Token ownership: `src/styles.css :root` is the runtime source; this document mir
 
 ## Colors
 
-Paper and sage connect the UI to the story materials. Forest green is the shared interaction color. Ocean blue and peach are book category colors only. Soft gold identifies light and earned treasures. All three reading views retain the same neutral shell. Normal text uses ink; captions use muted green-gray. Focus uses a solid primary outline and spacing. No color-only correctness feedback.
+Paper and sage connect the UI to the story materials. Forest green is the shared interaction color. Ocean blue, peach, autumn ochre and rainy sage are book category colors only. Soft gold identifies light and earned treasures. All five reading views retain the same neutral shell. Normal text uses ink; captions use muted green-gray. Focus uses a solid primary outline and spacing. No color-only correctness feedback.
 
 ## Typography
 
@@ -56,7 +56,7 @@ Chinese Songti display type is justified by the actual printed-book subject. Use
 
 ## Layout
 
-Desktop shelf header has the library name left, quiet navigation center, collection and sound right. A centered title introduces a substantial live 3D shelf. Book names beneath the scene are accessible selection controls. A restrained explainer strip ends the shelf page.
+Desktop shelf header has the library name left, quiet navigation center, collection and sound right. A centered title introduces a substantial live 3D shelf. Five covers share one row on desktop; at 760px and below they occupy two physical shelves, three above and two centered below. Book names beneath the scene follow the same order, with a five-column desktop grid and a centered three-plus-two mobile grid. Cover sizes animate to the full reading size during flight. Book names are accessible selection controls. A restrained explainer strip ends the shelf page.
 
 Opening a book expands the persistent room to `100dvh`. Hide the site header, introduction, explainer, footer and collection entry throughout reading, quiz and reward. Keep only a compact toolbar (return, story title, progress, sound), the live scene and a separate bottom story dock. The canvas fills all space above the dock; no text or controls cover character faces. The reading camera reserves 76px above the scene, 64px on phones and 52px in short landscape viewports.
 
@@ -87,6 +87,17 @@ Rounded book edges and sphere-based characters are echoed by pill actions and ro
 | Scrollbar | styles.css global scrollbar rules | DESIGN.md | Narrow screenshots and overflow checks |
 | Feedback | App.tsx story-content live region | User click progression | Wrong/correct quiz, retry, reward |
 | Storage | App.tsx guarded localStorage | Local-only collection | Reload preserves reward |
+| Narrative actions | stories.ts actions + App.tsx step + StoryWorld props | Story-specific clues, choices and consequences | Canvas/button parity, sequential path, persistent visual results |
+
+### Storytelling and keepsakes
+
+Each four-scene story follows a concrete wish and obstacle, an unsuccessful attempt, a discovery or changed approach, and an ending that answers the opening through action. Keep each displayed passage to a few short Chinese sentences. Let props carry clues: a branch inside its shadow, sunlight falling on water, matching green ribbon ends, a bark ramp over a tree root, and a leaf umbrella lowered to shelter a smaller friend. Avoid concluding moral summaries and unrelated ladders, bridges or magic gifts.
+
+Every action names its canvas target and describes its result in `stories.ts`. Only the current target advances the story; the native button performs the same action. Results remain visible until the next page. The forest path has three separately initiated steps, each moving the light before the rabbit follows; repeated clicks cannot skip a step or reveal later text.
+
+The autumn book requires placing the bark before pushing the walnut; all three friends move together, and the shell opens into shared portions. The rain book shows a wet rabbit, lowers the umbrella, hands it over, then keeps it with the rabbit across the puddle. Walnut and umbrella props rest where placed rather than bobbing like the stars. Rain moves only when reduced motion is off.
+
+The ending question invites causal recall, with a story-specific hint for another answer. Children may collect the bookmark without answering or after any answer. A bookmark is a keepsake of finishing the story, with a short reminder of its central moment; correctness never gates collection. Preserve existing story IDs and the storage key. Longer answer options stack on phones, and the story dock retains its internal scroll ownership.
 
 ### Motion
 
@@ -94,7 +105,7 @@ Continuous eased movement conveys story state. On entry, animate the actual canv
 
 ### Iconography and content
 
-Phosphor regular/duotone is the one UI icon family. A custom book brand mark and cover illustrations are identity/art, not a parallel control icon family. Every icon-only control has a Chinese accessible name. Book titles, narrative, quiz and reward names live in `src/stories.ts`. Each of the three books is complete; no unavailable or placeholder book is exposed.
+Phosphor regular/duotone is the one UI icon family. A custom book brand mark and cover illustrations are identity/art, not a parallel control icon family. Every icon-only control has a Chinese accessible name. Book titles, narrative, quiz and reward names live in `src/stories.ts`. Each of the five books is complete; no unavailable or placeholder book is exposed.
 
 ## Do's and Don'ts
 
